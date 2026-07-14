@@ -66,6 +66,69 @@ public sealed class LocalFileOperationService : IFileOperationService
 		}, cancellationToken);
 	}
 
+	public Task<IReadOnlyList<string>> DeletePermanentlyAsync(
+		IReadOnlyList<string> paths,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(paths);
+		return Task.Run<IReadOnlyList<string>>(() =>
+		{
+			string[] roots = RemoveDescendantPaths(paths);
+			var completed = new List<string>(roots.Length);
+			foreach (string path in roots)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+				try
+				{
+					System.IO.FileAttributes attributes = File.GetAttributes(path);
+					bool isDirectory = attributes.HasFlag(System.IO.FileAttributes.Directory);
+					string? linkTarget = isDirectory ? new DirectoryInfo(path).LinkTarget : new FileInfo(path).LinkTarget;
+					if (isDirectory && linkTarget is null)
+					{
+						Directory.Delete(path, recursive: true);
+					}
+					else
+					{
+						File.Delete(path);
+					}
+					completed.Add(path);
+				}
+				catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+				{
+					throw new PermanentDeletePartialException(path, completed.ToArray(), ex);
+				}
+			}
+
+			return completed;
+		}, cancellationToken);
+	}
+
+	private static string[] RemoveDescendantPaths(IReadOnlyList<string> paths)
+	{
+		string[] ordered = paths
+			.Select(Path.GetFullPath)
+			.Distinct(StringComparer.Ordinal)
+			.OrderBy(static path => path.Length)
+			.ToArray();
+		var roots = new List<string>(ordered.Length);
+		foreach (string path in ordered)
+		{
+			if (!roots.Any(root => IsDescendant(path, root)))
+			{
+				roots.Add(path);
+			}
+		}
+		return roots.ToArray();
+	}
+
+	private static bool IsDescendant(string path, string potentialParent)
+	{
+		string relativePath = Path.GetRelativePath(potentialParent, path);
+		return relativePath != "." && relativePath != ".." &&
+			!relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+			!Path.IsPathRooted(relativePath);
+	}
+
 	private static string GetUniquePath(string parentPath, string desiredName)
 	{
 		string destination = Path.Combine(parentPath, desiredName);

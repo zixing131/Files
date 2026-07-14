@@ -199,6 +199,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		bool nativeMenuRouting = menuFirstInvoke && menuSecondInvoke && menuChangedSidebar && isSidebarOpen == menuInitialSidebarState;
 		int commandAccelerators = KeyboardAccelerators.Count(accelerator =>
 			accelerator.Modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Windows));
+		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip) = await RunFileMutationDiagnosticsAsync();
 
 		using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
 		Console.WriteLine(
@@ -207,7 +208,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} command_accelerators={commandAccelerators} " +
+			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -219,6 +220,66 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		Console.WriteLine(
 			$"FILES_MACOS_SELECTION items={browser.Items.Count} selected={selectedCount} " +
 			$"inverted_count={selectedItems.Count} elapsed_ms={selectionTimer.Elapsed.TotalMilliseconds:F1}");
+	}
+
+	private async Task<(bool PermanentDelete, bool MetadataEdit)> RunFileMutationDiagnosticsAsync()
+	{
+		string root = Path.Combine(Path.GetTempPath(), $"files-macos-diagnostics-{Guid.NewGuid():N}");
+		try
+		{
+			string deleteRoot = Path.Combine(root, "delete-root");
+			string nestedFile = Path.Combine(deleteRoot, "nested", "item.txt");
+			Directory.CreateDirectory(Path.GetDirectoryName(nestedFile)!);
+			await File.WriteAllTextAsync(nestedFile, "diagnostic");
+			await FileOperationService.DeletePermanentlyAsync([deleteRoot, nestedFile]);
+			bool permanentDelete = !Directory.Exists(deleteRoot) && !File.Exists(nestedFile);
+			string completedPath = Path.Combine(root, "a");
+			string missingPath = Path.Combine(root, "missing-item");
+			Directory.CreateDirectory(root);
+			await File.WriteAllTextAsync(completedPath, "diagnostic");
+			try
+			{
+				await FileOperationService.DeletePermanentlyAsync([completedPath, missingPath]);
+				permanentDelete = false;
+			}
+			catch (PermanentDeletePartialException ex)
+			{
+				permanentDelete &= ex.CompletedPaths.SequenceEqual([completedPath]) && ex.FailedPath == missingPath && !File.Exists(completedPath);
+			}
+			string linkTarget = Path.Combine(root, "link-target");
+			string directoryLink = Path.Combine(root, "directory-link");
+			Directory.CreateDirectory(linkTarget);
+			Directory.CreateSymbolicLink(directoryLink, linkTarget);
+			await FileOperationService.DeletePermanentlyAsync([directoryLink]);
+			permanentDelete &= !Directory.Exists(directoryLink) && Directory.Exists(linkTarget);
+
+			string metadataPath = Path.Combine(root, "metadata.txt");
+			await File.WriteAllTextAsync(metadataPath, "diagnostic");
+			UnixFileMode expectedMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead;
+			string[] expectedTags = ["Files Diagnostic", "Blue"];
+			await FilePropertiesService.UpdateAsync(metadataPath, expectedMode, expectedTags);
+			FilePropertiesSummary summary = await FilePropertiesService.GetSummaryAsync([metadataPath]);
+			bool metadataEdit = summary.UnixMode == expectedMode && summary.FinderTags is not null &&
+				expectedTags.All(tag => summary.FinderTags.Contains(tag, StringComparer.Ordinal));
+			return (permanentDelete, metadataEdit);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			return (false, false);
+		}
+		finally
+		{
+			try
+			{
+				if (Directory.Exists(root))
+				{
+					Directory.Delete(root, recursive: true);
+				}
+			}
+			catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+			{
+			}
+		}
 	}
 
 	private static bool VerifySelectionRoundtrip(FrameworkElement control, int itemCount)
@@ -341,7 +402,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		return command switch
 		{
 			MacOSMenuCommand.CloseTab => isIdle && ViewModel.Tabs.Count > 1,
-			MacOSMenuCommand.Properties or MacOSMenuCommand.MoveToTrash or MacOSMenuCommand.Rename or
+			MacOSMenuCommand.Properties or MacOSMenuCommand.MoveToTrash or MacOSMenuCommand.DeletePermanently or MacOSMenuCommand.Rename or
 				MacOSMenuCommand.Cut or MacOSMenuCommand.Copy or MacOSMenuCommand.CopyPath => isIdle && selectedItems.Count > 0,
 			MacOSMenuCommand.Paste => PasteButton.IsEnabled,
 			MacOSMenuCommand.Undo => isIdle && undoHistory.Count > 0,
@@ -375,6 +436,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				break;
 			case MacOSMenuCommand.MoveToTrash:
 				DeleteButton_Click(DeleteButton, args);
+				break;
+			case MacOSMenuCommand.DeletePermanently:
+				await DeletePermanentlyAsync();
 				break;
 			case MacOSMenuCommand.Rename:
 				RenameButton_Click(RenameButton, args);
@@ -1286,6 +1350,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		MoreRenameItem.IsEnabled = RenameButton.IsEnabled;
 		MoreShareItem.IsEnabled = ShareButton.IsEnabled;
 		MoreDeleteItem.IsEnabled = DeleteButton.IsEnabled;
+		MorePermanentDeleteItem.IsEnabled = DeleteButton.IsEnabled;
 		MoreRevealItem.IsEnabled = RevealButton.IsEnabled;
 		MorePropertiesItem.IsEnabled = PropertiesButton.IsEnabled;
 		MoreSelectionSubItem.IsEnabled = SelectionButton.IsEnabled;
@@ -1557,6 +1622,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 					break;
 				case "Delete":
 					DeleteButton_Click(sender, e);
+					break;
+				case "PermanentDelete":
+					await DeletePermanentlyAsync();
 					break;
 				case "Properties":
 					PropertiesButton_Click(sender, e);
@@ -2360,6 +2428,61 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private async void PermanentDeleteAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (selectedItems.Count > 0 && fileTransferCancellation is null)
+		{
+			args.Handled = true;
+			await DeletePermanentlyAsync();
+		}
+	}
+
+	private async Task DeletePermanentlyAsync()
+	{
+		if (Browser is not DirectoryBrowserViewModel targetBrowser || selectedItems.Count is 0 || fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		IReadOnlyList<LocalFileSystemItem> items = selectedItems;
+		var dialog = new ContentDialog
+		{
+			Title = GetResource("PermanentDeleteDialogTitle"),
+			Content = string.Format(GetResource("PermanentDeleteDialogMessageFormat"), items.Count),
+			PrimaryButtonText = GetResource("PermanentDeleteButtonText"),
+			CloseButtonText = GetResource("CancelButtonText"),
+			DefaultButton = ContentDialogButton.Close,
+			XamlRoot = XamlRoot,
+		};
+
+		if (await dialog.ShowAsync() is not ContentDialogResult.Primary)
+		{
+			return;
+		}
+
+		try
+		{
+			await FileOperationService.DeletePermanentlyAsync(items.Select(static item => item.Path).ToArray());
+			targetBrowser.StatusText = string.Format(GetResource("PermanentDeleteCompletedFormat"), items.Count);
+		}
+		catch (PermanentDeletePartialException ex)
+		{
+			await ShowErrorAsync(string.Format(
+				GetResource("PermanentDeletePartialErrorFormat"),
+				ex.CompletedPaths.Count,
+				Path.GetFileName(ex.FailedPath),
+				ex.Message));
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			await ShowErrorAsync(string.IsNullOrEmpty(ex.Message) ? GetResource("PermanentDeleteErrorMessage") : ex.Message);
+		}
+		finally
+		{
+			await targetBrowser.RefreshAsync();
+		}
+	}
+
 	private async void RevealButton_Click(object sender, RoutedEventArgs e)
 	{
 		if (selectedItems is not [LocalFileSystemItem item])
@@ -2673,14 +2796,34 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		try
 		{
 			FilePropertiesSummary summary = await FilePropertiesService.GetSummaryAsync(items.Select(static item => item.Path).ToArray());
+			FrameworkElement content = CreatePropertiesContent(summary, out TextBox? permissionsBox, out TextBox? tagsBox);
+			bool canEdit = summary.Path is not null && permissionsBox is not null && tagsBox is not null;
 			var dialog = new ContentDialog
 			{
 				Title = GetResource("PropertiesDialogTitle"),
-				Content = CreatePropertiesContent(summary),
+				Content = content,
+				PrimaryButtonText = canEdit ? GetResource("SaveButtonText") : string.Empty,
 				CloseButtonText = GetResource("CloseButtonText"),
+				DefaultButton = canEdit ? ContentDialogButton.Primary : ContentDialogButton.Close,
+				IsPrimaryButtonEnabled = canEdit,
 				XamlRoot = XamlRoot,
 			};
-			await dialog.ShowAsync();
+			if (canEdit)
+			{
+				void ValidateEditor(object? sender, TextChangedEventArgs args) =>
+					dialog.IsPrimaryButtonEnabled = TryParseUnixMode(permissionsBox!.Text, out _) && AreFinderTagsValid(tagsBox!.Text);
+				permissionsBox!.TextChanged += ValidateEditor;
+				tagsBox!.TextChanged += ValidateEditor;
+			}
+
+			if (await dialog.ShowAsync() is ContentDialogResult.Primary &&
+				summary.Path is not null && permissionsBox is not null && tagsBox is not null &&
+				TryParseUnixMode(permissionsBox.Text, out UnixFileMode unixMode))
+			{
+				await FilePropertiesService.UpdateAsync(summary.Path, unixMode, ParseFinderTags(tagsBox.Text));
+				targetBrowser.StatusText = GetResource("PropertiesSavedMessage");
+				await targetBrowser.RefreshAsync();
+			}
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 		{
@@ -2693,8 +2836,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
-	private FrameworkElement CreatePropertiesContent(FilePropertiesSummary summary)
+	private FrameworkElement CreatePropertiesContent(
+		FilePropertiesSummary summary,
+		out TextBox? permissionsBox,
+		out TextBox? tagsBox)
 	{
+		permissionsBox = null;
+		tagsBox = null;
 		var panel = new StackPanel
 		{
 			Spacing = 10,
@@ -2728,7 +2876,28 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		if (summary.UnixMode is not null)
 		{
 			string octalMode = Convert.ToString((int)summary.UnixMode.Value, 8).PadLeft(3, '0');
-			AddPropertyRow(panel, GetResource("PropertyPermissionsLabel"), $"{octalMode}  ({summary.UnixMode.Value})");
+			if (summary.Path is not null && summary.LinkTarget is null)
+			{
+				permissionsBox = AddEditablePropertyRow(panel, GetResource("PropertyPermissionsLabel"), octalMode);
+				permissionsBox.PlaceholderText = GetResource("PropertyPermissionsPlaceholder");
+			}
+			else
+			{
+				AddPropertyRow(panel, GetResource("PropertyPermissionsLabel"), $"{octalMode}  ({summary.UnixMode.Value})");
+			}
+		}
+		if (summary.FinderTags is not null)
+		{
+			string tags = string.Join(", ", summary.FinderTags);
+			if (summary.Path is not null && summary.LinkTarget is null)
+			{
+				tagsBox = AddEditablePropertyRow(panel, GetResource("PropertyFinderTagsLabel"), tags);
+				tagsBox.PlaceholderText = GetResource("PropertyFinderTagsPlaceholder");
+			}
+			else
+			{
+				AddPropertyRow(panel, GetResource("PropertyFinderTagsLabel"), tags);
+			}
 		}
 		if (summary.LinkTarget is not null)
 		{
@@ -2742,6 +2911,45 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
 		};
 	}
+
+	private static TextBox AddEditablePropertyRow(Panel panel, string label, string value)
+	{
+		var row = new Grid();
+		row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+		row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+		row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+		var input = new TextBox { Text = value };
+		Grid.SetColumn(input, 1);
+		row.Children.Add(input);
+		panel.Children.Add(row);
+		return input;
+	}
+
+	private static bool TryParseUnixMode(string value, out UnixFileMode mode)
+	{
+		mode = default;
+		string text = value.Trim();
+		if (text.Length is < 3 or > 4 || text.Any(static character => character is < '0' or > '7'))
+		{
+			return false;
+		}
+
+		int parsed = 0;
+		foreach (char character in text)
+		{
+			parsed = (parsed * 8) + (character - '0');
+		}
+		mode = (UnixFileMode)parsed;
+		return true;
+	}
+
+	private static bool AreFinderTagsValid(string value) =>
+		ParseFinderTags(value).All(static tag => tag.Length <= 255 && tag.IndexOfAny(['\r', '\n']) < 0);
+
+	private static string[] ParseFinderTags(string value) => value
+		.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+		.Distinct(StringComparer.CurrentCultureIgnoreCase)
+		.ToArray();
 
 	private static void AddPropertyRow(Panel panel, string label, string value)
 	{

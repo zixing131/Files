@@ -179,6 +179,13 @@
   <data name="MoveToTrashErrorMessage" xml:space="preserve">
     <value>无法将选中的项目移到废纸篓。</value>
   </data>
+  <data name="ContextPermanentDeleteItem.Text" xml:space="preserve"><value>永久删除…</value></data>
+  <data name="PermanentDeleteDialogTitle" xml:space="preserve"><value>永久删除？</value></data>
+  <data name="PermanentDeleteDialogMessageFormat" xml:space="preserve"><value>将永久删除选中的 {0} 个项目，且无法撤销此操作。</value></data>
+  <data name="PermanentDeleteButtonText" xml:space="preserve"><value>永久删除</value></data>
+  <data name="PermanentDeleteCompletedFormat" xml:space="preserve"><value>已永久删除 {0} 个项目。</value></data>
+  <data name="PermanentDeletePartialErrorFormat" xml:space="preserve"><value>已删除 {0} 个项目，但无法删除“{1}”：{2}</value></data>
+  <data name="PermanentDeleteErrorMessage" xml:space="preserve"><value>无法永久删除所选项目。</value></data>
   <data name="OpenItemErrorMessage" xml:space="preserve">
     <value>无法打开该项目。</value>
   </data>
@@ -278,6 +285,10 @@
   <data name="PropertyPermissionsLabel" xml:space="preserve">
     <value>权限</value>
   </data>
+  <data name="PropertyPermissionsPlaceholder" xml:space="preserve"><value>八进制权限，例如 755</value></data>
+  <data name="PropertyFinderTagsLabel" xml:space="preserve"><value>Finder 标签</value></data>
+  <data name="PropertyFinderTagsPlaceholder" xml:space="preserve"><value>使用逗号分隔多个标签</value></data>
+  <data name="PropertiesSavedMessage" xml:space="preserve"><value>属性已保存。</value></data>
   <data name="PropertyLinkTargetLabel" xml:space="preserve">
     <value>链接目标</value>
   </data>

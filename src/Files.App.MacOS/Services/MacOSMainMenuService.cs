@@ -33,6 +33,7 @@ internal enum MacOSMenuCommand
 	OpenFolder,
 	ConnectServer,
 	OpenTerminal,
+	DeletePermanently,
 }
 
 internal interface IMacOSMenuCommandTarget

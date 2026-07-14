@@ -9,6 +9,38 @@ public sealed class LocalFilePropertiesService : IFilePropertiesService
 		return Task.Run(() => GetSummary(paths, cancellationToken), cancellationToken);
 	}
 
+	public Task UpdateAsync(
+		string path,
+		UnixFileMode unixMode,
+		IReadOnlyList<string> finderTags,
+		CancellationToken cancellationToken = default)
+	{
+		return Task.Run(() =>
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			string fullPath = Path.GetFullPath(path);
+			UnixFileMode previousMode = File.GetUnixFileMode(fullPath);
+			IReadOnlyList<string> previousTags = MacOSFinderTagService.GetTags(fullPath);
+			File.SetUnixFileMode(fullPath, unixMode);
+			try
+			{
+				MacOSFinderTagService.SetTags(fullPath, finderTags);
+			}
+			catch
+			{
+				File.SetUnixFileMode(fullPath, previousMode);
+				try
+				{
+					MacOSFinderTagService.SetTags(fullPath, previousTags);
+				}
+				catch (IOException)
+				{
+				}
+				throw;
+			}
+		}, cancellationToken);
+	}
+
 	private static FilePropertiesSummary GetSummary(IReadOnlyList<string> paths, CancellationToken cancellationToken)
 	{
 		if (paths.Count is 0)
@@ -25,7 +57,7 @@ public sealed class LocalFilePropertiesService : IFilePropertiesService
 
 		if (fullPaths is not [string singlePath])
 		{
-			return new(fullPaths.Length, totals.FileCount, totals.FolderCount, totals.TotalSize, null, null, null, null, null, null);
+			return new(fullPaths.Length, totals.FileCount, totals.FolderCount, totals.TotalSize, null, null, null, null, null, null, null);
 		}
 
 		System.IO.FileAttributes attributes = File.GetAttributes(singlePath);
@@ -51,7 +83,8 @@ public sealed class LocalFilePropertiesService : IFilePropertiesService
 			info.CreationTimeUtc,
 			info.LastWriteTimeUtc,
 			unixMode,
-			linkTarget);
+			linkTarget,
+			MacOSFinderTagService.GetTags(singlePath));
 	}
 
 	private static void CountEntry(string path, PropertyTotals totals, CancellationToken cancellationToken, bool isRoot)

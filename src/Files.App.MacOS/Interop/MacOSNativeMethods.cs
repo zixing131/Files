@@ -80,6 +80,9 @@ internal static partial class MacOSNativeMethods
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_get_finder_tags", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial nint GetFinderTags(string path);
 
+	[LibraryImport(LibraryName, EntryPoint = "files_macos_set_finder_tags", StringMarshalling = StringMarshalling.Utf8)]
+	internal static partial nint SetFinderTags(string path, string tagsJson);
+
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_coordinate_file_operation", StringMarshalling = StringMarshalling.Utf8)]
 	internal static unsafe partial nint CoordinateFileOperation(
 		string sourcePath,

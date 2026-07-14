@@ -237,6 +237,7 @@ __attribute__((visibility("default"))) void files_macos_install_main_menu(
 			files_add_menu_command(fileMenu, zh ? @"显示简介" : @"Get Info", @"i", NSEventModifierFlagCommand, 5);
 			files_add_menu_command(fileMenu, zh ? @"重命名" : @"Rename", @"", 0, 7);
 			files_add_menu_command(fileMenu, zh ? @"移到废纸篓" : @"Move to Trash", @"\x7F", NSEventModifierFlagCommand, 6);
+			files_add_menu_command(fileMenu, zh ? @"立即删除…" : @"Delete Immediately…", @"\x7F", NSEventModifierFlagCommand | NSEventModifierFlagOption, 28);
 
 			NSMenu *editMenu = files_add_main_submenu(mainMenu, zh ? @"编辑" : @"Edit");
 			files_add_menu_command(editMenu, zh ? @"撤销" : @"Undo", @"z", NSEventModifierFlagCommand, 8);
@@ -962,6 +963,40 @@ __attribute__((visibility("default"))) char *files_macos_get_finder_tags(const c
 		}
 
 		return files_copy_json(tags ?: @[]);
+	}
+}
+
+__attribute__((visibility("default"))) char *files_macos_set_finder_tags(const char *path, const char *tagsJson)
+{
+	@autoreleasepool
+	{
+		NSURL *url = files_url_from_path(path);
+		if (url == nil || tagsJson == NULL)
+		{
+			return strdup("The Finder tag request is invalid.");
+		}
+
+		NSData *jsonData = [[NSData alloc] initWithBytes:tagsJson length:strlen(tagsJson)];
+		NSError *jsonError = nil;
+		id value = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonError];
+		if (![value isKindOfClass:NSArray.class])
+		{
+			return files_copy_error(jsonError) ?: strdup("Finder tags must be a JSON array.");
+		}
+		for (id tag in (NSArray *)value)
+		{
+			if (![tag isKindOfClass:NSString.class])
+			{
+				return strdup("Every Finder tag must be text.");
+			}
+		}
+
+		NSError *error = nil;
+		if (![url setResourceValue:value forKey:NSURLTagNamesKey error:&error])
+		{
+			return files_copy_error(error) ?: strdup("Finder tags couldn't be saved.");
+		}
+		return NULL;
 	}
 }
 

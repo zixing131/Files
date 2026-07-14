@@ -21,6 +21,7 @@
 		<KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="UndoAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Z" Modifiers="Control,Shift" Invoked="RedoAccelerator_Invoked" />
 		<KeyboardAccelerator Key="D" Modifiers="Control,Shift" Invoked="SplitViewAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Delete" Modifiers="Shift" Invoked="PermanentDeleteAccelerator_Invoked" />
 		<!--  Uno maps the macOS Command key to the WinUI Windows modifier.  -->
 		<KeyboardAccelerator Key="C" Modifiers="Windows" Invoked="CopyAccelerator_Invoked" />
 		<KeyboardAccelerator Key="X" Modifiers="Windows" Invoked="CutAccelerator_Invoked" />
@@ -297,6 +298,7 @@
 										<MenuFlyoutItem x:Name="MoreRenameItem" x:Uid="ContextRenameItem" Click="ContextAction_Click" Tag="Rename" Visibility="Collapsed" />
 										<MenuFlyoutItem x:Name="MoreShareItem" x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" Visibility="Collapsed" />
 										<MenuFlyoutItem x:Name="MoreDeleteItem" x:Uid="ContextDeleteItem" Click="ContextAction_Click" Tag="Delete" Visibility="Collapsed" />
+										<MenuFlyoutItem x:Name="MorePermanentDeleteItem" x:Uid="ContextPermanentDeleteItem" Click="ContextAction_Click" Tag="PermanentDelete" />
 										<MenuFlyoutSeparator x:Name="MoreCompactSeparator" Visibility="Collapsed" />
 										<MenuFlyoutItem x:Name="MoreRevealItem" x:Uid="ContextRevealItem" Click="ContextAction_Click" Tag="Reveal" />
 										<MenuFlyoutItem x:Name="MorePropertiesItem" x:Uid="ContextPropertiesItem" Click="ContextAction_Click" Tag="Properties" />
@@ -395,6 +397,7 @@
 												<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />
 												<MenuFlyoutSeparator />
 												<MenuFlyoutItem x:Uid="ContextDeleteItem" Click="ContextAction_Click" Tag="Delete" />
+												<MenuFlyoutItem x:Uid="ContextPermanentDeleteItem" Click="ContextAction_Click" Tag="PermanentDelete" />
 												<MenuFlyoutItem x:Uid="ContextPropertiesItem" Click="ContextAction_Click" Tag="Properties" />
 												<MenuFlyoutSeparator />
 												<MenuFlyoutItem x:Uid="ContextCompressItem" Click="ContextAction_Click" Tag="Compress" />
@@ -476,6 +479,7 @@
 													<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />
 													<MenuFlyoutSeparator />
 													<MenuFlyoutItem x:Uid="ContextDeleteItem" Click="ContextAction_Click" Tag="Delete" />
+													<MenuFlyoutItem x:Uid="ContextPermanentDeleteItem" Click="ContextAction_Click" Tag="PermanentDelete" />
 													<MenuFlyoutItem x:Uid="ContextPropertiesItem" Click="ContextAction_Click" Tag="Properties" />
 													<MenuFlyoutSeparator />
 													<MenuFlyoutItem x:Uid="ContextCompressItem" Click="ContextAction_Click" Tag="Compress" />
@@ -597,6 +601,7 @@
 													<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />
 													<MenuFlyoutSeparator />
 													<MenuFlyoutItem x:Uid="ContextDeleteItem" Click="ContextAction_Click" Tag="Delete" />
+													<MenuFlyoutItem x:Uid="ContextPermanentDeleteItem" Click="ContextAction_Click" Tag="PermanentDelete" />
 													<MenuFlyoutItem x:Uid="ContextPropertiesItem" Click="ContextAction_Click" Tag="Properties" />
 													<MenuFlyoutSeparator />
 													<MenuFlyoutItem x:Uid="ContextCompressItem" Click="ContextAction_Click" Tag="Compress" />
@@ -670,6 +675,7 @@
 														<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />
 														<MenuFlyoutSeparator />
 														<MenuFlyoutItem x:Uid="ContextDeleteItem" Click="ContextAction_Click" Tag="Delete" />
+														<MenuFlyoutItem x:Uid="ContextPermanentDeleteItem" Click="ContextAction_Click" Tag="PermanentDelete" />
 														<MenuFlyoutItem x:Uid="ContextPropertiesItem" Click="ContextAction_Click" Tag="Properties" />
 														<MenuFlyoutSeparator />
 														<MenuFlyoutItem x:Uid="ContextCompressItem" Click="ContextAction_Click" Tag="Compress" />

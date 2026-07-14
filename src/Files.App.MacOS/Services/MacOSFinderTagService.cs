@@ -31,4 +31,23 @@ internal static class MacOSFinderTagService
 			return [];
 		}
 	}
+
+	public static void SetTags(string path, IReadOnlyList<string> tags)
+	{
+		string json = JsonSerializer.Serialize(tags);
+		nint errorPointer = MacOSNativeMethods.SetFinderTags(path, json);
+		if (errorPointer is 0)
+		{
+			return;
+		}
+
+		try
+		{
+			throw new IOException(Marshal.PtrToStringUTF8(errorPointer) ?? "Finder tags couldn't be saved.");
+		}
+		finally
+		{
+			MacOSNativeMethods.Free(errorPointer);
+		}
+	}
 }

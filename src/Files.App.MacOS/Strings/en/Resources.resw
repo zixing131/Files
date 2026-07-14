@@ -179,6 +179,13 @@
   <data name="MoveToTrashErrorMessage" xml:space="preserve">
     <value>The selected items couldn't be moved to the Trash.</value>
   </data>
+  <data name="ContextPermanentDeleteItem.Text" xml:space="preserve"><value>Delete permanently…</value></data>
+  <data name="PermanentDeleteDialogTitle" xml:space="preserve"><value>Delete permanently?</value></data>
+  <data name="PermanentDeleteDialogMessageFormat" xml:space="preserve"><value>This will permanently delete {0} selected item(s). This action can't be undone.</value></data>
+  <data name="PermanentDeleteButtonText" xml:space="preserve"><value>Delete permanently</value></data>
+  <data name="PermanentDeleteCompletedFormat" xml:space="preserve"><value>Permanently deleted {0} item(s).</value></data>
+  <data name="PermanentDeletePartialErrorFormat" xml:space="preserve"><value>{0} item(s) were deleted, but “{1}” couldn't be deleted: {2}</value></data>
+  <data name="PermanentDeleteErrorMessage" xml:space="preserve"><value>The selected items couldn't be permanently deleted.</value></data>
   <data name="OpenItemErrorMessage" xml:space="preserve">
     <value>The item couldn't be opened.</value>
   </data>
@@ -278,6 +285,10 @@
   <data name="PropertyPermissionsLabel" xml:space="preserve">
     <value>Permissions</value>
   </data>
+  <data name="PropertyPermissionsPlaceholder" xml:space="preserve"><value>Octal mode, for example 755</value></data>
+  <data name="PropertyFinderTagsLabel" xml:space="preserve"><value>Finder tags</value></data>
+  <data name="PropertyFinderTagsPlaceholder" xml:space="preserve"><value>Comma-separated tags</value></data>
+  <data name="PropertiesSavedMessage" xml:space="preserve"><value>Properties saved.</value></data>
   <data name="PropertyLinkTargetLabel" xml:space="preserve">
     <value>Link target</value>
   </data>
