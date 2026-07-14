@@ -1,3 +1,4 @@
+using Files.App.MacOS.Controls;
 using Files.App.MacOS.Models;
 using Files.App.MacOS.Services;
 using Files.App.MacOS.ViewModels;
@@ -144,14 +145,43 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		isPreviewPaneOpen = initialPreviewState;
 		UpdatePreviewPaneVisuals();
 		bool previewRoundtrip = previewChanged && PreviewPaneBorder.Visibility == (initialPreviewState ? Visibility.Visible : Visibility.Collapsed);
-		UpdateCommandToolbarLayout(1400);
+		UpdateCommandToolbarLayout(2000);
 		bool toolbarWide = MoreCommandsButton.Visibility is Visibility.Collapsed && RevealButton.Visibility is Visibility.Visible && RenameButton.Visibility is Visibility.Visible;
-		UpdateCommandToolbarLayout(1100);
+		UpdateCommandToolbarLayout(1400);
 		bool toolbarOverflow = MoreCommandsButton.Visibility is Visibility.Visible && RevealButton.Visibility is Visibility.Collapsed && RenameButton.Visibility is Visibility.Visible;
-		UpdateCommandToolbarLayout(800);
+		UpdateCommandToolbarLayout(900);
 		bool toolbarCompact = MoreCommandsButton.Visibility is Visibility.Visible && RenameButton.Visibility is Visibility.Collapsed && MoreRenameItem.Visibility is Visibility.Visible;
 		UpdateCommandToolbarLayout(CommandToolbarBorder.ActualWidth);
 		bool toolbarBreakpoints = toolbarWide && toolbarOverflow && toolbarCompact;
+		Button[] iconCommandButtons =
+		[
+			UndoButton,
+			RedoButton,
+			NewCommandButton,
+			CutButton,
+			CopyButton,
+			PasteButton,
+			RenameButton,
+			ShareButton,
+			DeleteButton,
+			RevealButton,
+			PropertiesButton,
+			SelectionButton,
+			ArchiveButton,
+			FavoriteButton,
+			TerminalButton,
+			PreviewPaneButton,
+			SplitViewButton,
+			SortCommandButton,
+			ViewCommandButton,
+		];
+		bool toolbarIcons = iconCommandButtons.All(static button =>
+			button.Content is CommandLabel { IconData: not null, Content.Length: > 0 });
+		if (!toolbarIcons)
+		{
+			Console.Error.WriteLine(
+				$"FILES_MACOS_TOOLBAR_ICON_ERROR buttons={string.Join(',', iconCommandButtons.Where(static button => button.Content is not CommandLabel { IconData: not null, Content.Length: > 0 }).Select(static button => button.Name))}");
+		}
 		FileSortField initialSortField = browser.SortField;
 		FileSortDirection initialSortDirection = browser.SortDirection;
 		FileSortField diagnosticSortField = initialSortField is FileSortField.Modified ? FileSortField.Size : FileSortField.Modified;
@@ -188,6 +218,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		bool sidebarLabels = ViewModel.Locations.Count > 0 && ViewModel.Locations.All(static location => !string.IsNullOrWhiteSpace(location.Name));
 		var sidebarLabelNames = ViewModel.Locations.Select(static location => location.Name).ToHashSet(StringComparer.CurrentCulture);
 		int renderedSidebarLabels = CountRenderedTextBlocks(SidebarList, sidebarLabelNames);
+		int renderedSidebarIcons = CountRenderedPathIcons(SidebarList);
+		bool sidebarIcons = renderedSidebarIcons == renderedSidebarLabels && renderedSidebarIcons > 0;
 		using System.Text.Json.JsonDocument menuDescription = System.Text.Json.JsonDocument.Parse(MainMenuService.Describe());
 		bool nativeMenuInstalled = menuDescription.RootElement.GetProperty("installed").GetBoolean() &&
 			menuDescription.RootElement.GetProperty("rootCount").GetInt32() >= 6 &&
@@ -208,8 +240,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"FILES_MACOS_PERF view={(browser.IsGridView ? "grid" : "details")} " +
 			$"items={browser.Items.Count} realized={realizedContainers} selection_roundtrip={selectionRoundtrip} " +
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
-			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
-			$"toolbar_breakpoints={toolbarBreakpoints} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
+			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
+			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
 			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
@@ -500,6 +532,16 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
 		{
 			count += CountRenderedTextBlocks(VisualTreeHelper.GetChild(root, index), labels);
+		}
+		return count;
+	}
+
+	private static int CountRenderedPathIcons(DependencyObject root)
+	{
+		int count = root is PathIcon { ActualWidth: > 0, Data: not null } ? 1 : 0;
+		for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+		{
+			count += CountRenderedPathIcons(VisualTreeHelper.GetChild(root, index));
 		}
 		return count;
 	}
@@ -1726,8 +1768,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void UpdateCommandToolbarLayout(double width)
 	{
-		bool useOverflow = width < 1260;
-		bool compact = width < 940;
+		bool useOverflow = width < 1800;
+		bool compact = width < 1120;
 		RenameButton.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
 		ShareButton.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
 		DeleteButton.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
@@ -3811,7 +3853,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		SecondaryPaneBorder.BorderThickness = new Thickness(secondaryIsActive ? 2 : 1);
 		PrimaryPaneBorder.BorderBrush = secondaryIsActive ? defaultBorder : activeBorder;
 		SecondaryPaneBorder.BorderBrush = secondaryIsActive ? activeBorder : defaultBorder;
-		SplitViewButton.Content = GetResource(ViewModel.ActiveTab?.IsSplitView is true ? "CloseSplitViewButtonText" : "SplitViewButton.Content");
+		if (SplitViewButton.Content is CommandLabel splitViewLabel)
+		{
+			splitViewLabel.Content = GetResource(ViewModel.ActiveTab?.IsSplitView is true ? "CloseSplitViewButtonText" : "SplitViewButton.Content");
+		}
 		UpdateSortHeaderVisuals();
 		UpdateViewModeVisuals();
 		UpdateAddressBar();
