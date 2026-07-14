@@ -234,6 +234,7 @@ __attribute__((visibility("default"))) void files_macos_install_main_menu(
 			files_add_standard_menu_item(appMenu, zh ? @"退出 Files" : @"Quit Files", @selector(terminate:), @"q", NSEventModifierFlagCommand);
 
 			NSMenu *fileMenu = files_add_main_submenu(mainMenu, zh ? @"文件" : @"File");
+			files_add_menu_command(fileMenu, zh ? @"新建窗口" : @"New Window", @"n", NSEventModifierFlagCommand, 33);
 			files_add_menu_command(fileMenu, zh ? @"新建标签页" : @"New Tab", @"t", NSEventModifierFlagCommand, 2);
 			files_add_menu_command(fileMenu, zh ? @"在新标签页中打开" : @"Open in New Tab", @"\r", NSEventModifierFlagCommand, 30);
 			files_add_menu_command(fileMenu, zh ? @"新建文件夹" : @"New Folder", @"n", NSEventModifierFlagCommand | NSEventModifierFlagShift, 3);
@@ -280,6 +281,8 @@ __attribute__((visibility("default"))) void files_macos_install_main_menu(
 			NSMenu *windowMenu = files_add_main_submenu(mainMenu, zh ? @"窗口" : @"Window");
 			files_add_standard_menu_item(windowMenu, zh ? @"最小化" : @"Minimize", @selector(performMiniaturize:), @"m", NSEventModifierFlagCommand);
 			files_add_standard_menu_item(windowMenu, zh ? @"缩放" : @"Zoom", @selector(performZoom:), @"", 0);
+			[windowMenu addItem:[NSMenuItem separatorItem]];
+			files_add_menu_command(windowMenu, zh ? @"关闭窗口" : @"Close Window", @"w", NSEventModifierFlagCommand | NSEventModifierFlagShift, 34);
 			[NSApp setWindowsMenu:windowMenu];
 			[NSApp setMainMenu:mainMenu];
 			atomic_store(&mainMenuRootCount, (int)mainMenu.numberOfItems);

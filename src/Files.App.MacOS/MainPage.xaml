@@ -41,6 +41,8 @@
 		<KeyboardAccelerator Key="Enter" Modifiers="Windows" Invoked="OpenInNewTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="D" Modifiers="Windows" Invoked="DuplicateAccelerator_Invoked" />
 		<KeyboardAccelerator Key="L" Modifiers="Windows,Menu" Invoked="CreateSymbolicLinkAccelerator_Invoked" />
+		<KeyboardAccelerator Key="N" Modifiers="Windows" Invoked="NewWindowAccelerator_Invoked" />
+		<KeyboardAccelerator Key="W" Modifiers="Windows,Shift" Invoked="CloseWindowAccelerator_Invoked" />
 	</Page.KeyboardAccelerators>
 
 	<Grid RowDefinitions="44,48,*">

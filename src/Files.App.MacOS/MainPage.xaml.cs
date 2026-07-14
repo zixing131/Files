@@ -29,13 +29,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private IArchiveService ArchiveService { get; } = new ZipArchiveService();
 	private IMacOSWorkspaceService WorkspaceService { get; } = new MacOSWorkspaceService();
 	private IMacOSAccessGrantService AccessGrantService { get; } = new MacOSAccessGrantService();
-	private MacOSMainMenuService MainMenuService { get; } = new();
+	private MacOSMainMenuService MainMenuService => ((App)Application.Current).MainMenuService;
 	private readonly ResourceLoader resourceLoader = ResourceLoader.GetForViewIndependentUse();
+	private static readonly SemaphoreSlim SettingsSaveLock = new(1, 1);
 	private IReadOnlyList<LocalFileSystemItem> selectedItems = [];
 	private CancellationTokenSource? fileTransferCancellation;
 	private CancellationTokenSource? searchInputCancellation;
 	private CancellationTokenSource? settingsSaveCancellation;
-	private readonly SemaphoreSlim settingsSaveLock = new(1, 1);
 	private readonly Stack<FileOperationHistoryEntry> undoHistory = new();
 	private readonly Stack<FileOperationHistoryEntry> redoHistory = new();
 	private AppSettings currentSettings = new();
@@ -49,10 +49,17 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private bool isSidebarOpen = true;
 	private double sidebarWidth = 228;
 	private bool isPreviewPaneOpen;
+	private readonly bool restoresWorkspace;
 	private string? lastRecordedRecentPath;
 
 	public MainPage()
+		: this(restoresWorkspace: true)
 	{
+	}
+
+	internal MainPage(bool restoresWorkspace)
+	{
+		this.restoresWorkspace = restoresWorkspace;
 		FileTransferHistoryService = new(FileTransferService, FileRenameService);
 		FileTrashHistoryService = new(WorkspaceService, FileTransferHistoryService);
 		InitializeComponent();
@@ -100,7 +107,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		isSidebarOpen = currentSettings.IsSidebarOpen;
 		sidebarWidth = currentSettings.SidebarWidth;
 		isPreviewPaneOpen = currentSettings.IsPreviewPaneOpen;
-		ViewModel.ApplySettings(currentSettings);
+		ViewModel.ApplySettings(restoresWorkspace ? currentSettings : currentSettings with { Workspace = null });
 		ApplyTheme(currentSettings.Theme);
 		await ViewModel.InitializeAsync();
 		ViewModel.WorkspaceChanged += ViewModel_WorkspaceChanged;
@@ -110,12 +117,12 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		UpdateSidebarSelection();
 		UpdatePreviewPaneVisuals();
 		UpdateCommandStates();
-		MainMenuService.Install(
-			this,
-			string.Equals(Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride, "zh-Hans", StringComparison.Ordinal));
-		MainMenuService.UpdateValidationSnapshot(this);
-		ScheduleWorkspaceSave();
-		if (string.Equals(Environment.GetEnvironmentVariable("FILES_MACOS_PERF_DIAGNOSTICS"), "1", StringComparison.Ordinal))
+		((App)Application.Current).UpdateMainMenu(this);
+		if (restoresWorkspace)
+		{
+			ScheduleWorkspaceSave();
+		}
+		if (restoresWorkspace && string.Equals(Environment.GetEnvironmentVariable("FILES_MACOS_PERF_DIAGNOSTICS"), "1", StringComparison.Ordinal))
 		{
 			_ = ReportPerformanceDiagnosticsAsync();
 		}
@@ -252,7 +259,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		bool sidebarSectionRoundtrip = sidebarSectionChanged && ViewModel.Locations.Count == initialSidebarLocationCount &&
 			ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Libraries" }).IsExpanded == initialLibrariesExpanded;
 		UpdateSidebarSelection();
-		await Task.Delay(250);
+		await Task.Delay(750);
 		bool sidebarLabels = ViewModel.Locations.Count > 0 && ViewModel.Locations.All(static location => !string.IsNullOrWhiteSpace(location.Name));
 		var sidebarLabelNames = ViewModel.Locations.Select(static location => location.Name).ToHashSet(StringComparer.CurrentCulture);
 		int renderedSidebarLabels = CountRenderedTextBlocks(SidebarList, sidebarLabelNames);
@@ -269,6 +276,24 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		bool menuSecondInvoke = MainMenuService.InvokeForDiagnostics(MacOSMenuCommand.ToggleSidebar);
 		await Task.Delay(100);
 		bool nativeMenuRouting = menuFirstInvoke && menuSecondInvoke && menuChangedSidebar && isSidebarOpen == menuInitialSidebarState;
+		App app = (App)Application.Current;
+		int initialWindowCount = app.WindowCount;
+		bool newWindowInvoked = MainMenuService.InvokeForDiagnostics(MacOSMenuCommand.NewWindow);
+		await Task.Delay(500);
+		MainPage? secondaryPage = app.ActivePage;
+		bool secondaryCreated = newWindowInvoked && app.WindowCount == initialWindowCount + 1 &&
+			secondaryPage is not null && !ReferenceEquals(secondaryPage, this) && !secondaryPage.restoresWorkspace;
+		bool secondarySidebarState = secondaryPage?.isSidebarOpen ?? false;
+		bool secondaryMenuInvoked = secondaryCreated && MainMenuService.InvokeForDiagnostics(MacOSMenuCommand.ToggleSidebar);
+		await Task.Delay(100);
+		bool activeWindowMenuRouting = secondaryMenuInvoked && secondaryPage is not null &&
+			secondaryPage.isSidebarOpen != secondarySidebarState && isSidebarOpen == menuInitialSidebarState;
+		if (secondaryPage is not null && !ReferenceEquals(secondaryPage, this))
+		{
+			app.CloseWindow(secondaryPage);
+			await Task.Delay(250);
+		}
+		bool multiWindowRoundtrip = secondaryCreated && activeWindowMenuRouting && app.WindowCount == initialWindowCount;
 		int commandAccelerators = KeyboardAccelerators.Count(accelerator =>
 			accelerator.Modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Windows));
 		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip, bool securityPropertiesRoundtrip, bool openWithRoundtrip, bool recentLocationsRoundtrip, bool duplicateRoundtrip, bool newTabRoundtrip, bool symbolicLinkRoundtrip) = await RunFileMutationDiagnosticsAsync();
@@ -280,7 +305,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
+			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} multi_window={multiWindowRoundtrip} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -652,7 +677,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 		finally
 		{
-			MainMenuService.Dispose();
 			AccessGrantService.Dispose();
 		}
 	}
@@ -667,6 +691,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		bool isIdle = fileTransferCancellation is null && !isHistoryOperationRunning && !isConnectingServer;
 		return command switch
 		{
+			MacOSMenuCommand.NewWindow => true,
+			MacOSMenuCommand.CloseWindow => true,
 			MacOSMenuCommand.CloseTab => isIdle && ViewModel.Tabs.Count > 1,
 			MacOSMenuCommand.Properties or MacOSMenuCommand.MoveToTrash or MacOSMenuCommand.DeletePermanently or MacOSMenuCommand.Rename or
 				MacOSMenuCommand.Cut or MacOSMenuCommand.Copy or MacOSMenuCommand.CopyPath => isIdle && selectedItems.Count > 0,
@@ -689,6 +715,12 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		var args = new RoutedEventArgs();
 		switch (command)
 		{
+			case MacOSMenuCommand.NewWindow:
+				((App)Application.Current).CreateWindow();
+				break;
+			case MacOSMenuCommand.CloseWindow:
+				((App)Application.Current).CloseWindow(this);
+				break;
 			case MacOSMenuCommand.Settings:
 				SettingsButton_Click(SettingsButton, args);
 				break;
@@ -1255,6 +1287,18 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private void NewWindowAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		args.Handled = true;
+		((App)Application.Current).CreateWindow();
+	}
+
+	private void CloseWindowAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		args.Handled = true;
+		((App)Application.Current).CloseWindow(this);
+	}
+
 	private bool CanDuplicateSelection()
 	{
 		if (Browser is not DirectoryBrowserViewModel browser || selectedItems.Count is 0)
@@ -1796,7 +1840,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			FileOperationProgressBar.Value = 0;
 		}
 		UpdatePreviewPaneContent();
-		MainMenuService.UpdateValidationSnapshot(this);
+		((App)Application.Current).UpdateMainMenu(this);
 	}
 
 	private void CommandToolbarBorder_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -4172,12 +4216,19 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private async Task<AppSettings> PersistSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
 	{
-		await settingsSaveLock.WaitAsync(cancellationToken);
+		await SettingsSaveLock.WaitAsync(cancellationToken);
 		try
 		{
-			AppSettings updatedSettings = settings with
+			AppSettings settingsToSave = settings;
+			if (!restoresWorkspace)
 			{
-				Workspace = ViewModel.CaptureWorkspaceState(),
+				AppSettings persistedSettings = await SettingsService.LoadAsync(cancellationToken);
+				settingsToSave = settingsToSave with { Workspace = persistedSettings.Workspace };
+			}
+
+			AppSettings updatedSettings = settingsToSave with
+			{
+				Workspace = restoresWorkspace ? ViewModel.CaptureWorkspaceState() : settingsToSave.Workspace,
 				SidebarWidth = sidebarWidth,
 				SchemaVersion = 9,
 			};
@@ -4187,7 +4238,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 		finally
 		{
-			settingsSaveLock.Release();
+			SettingsSaveLock.Release();
 		}
 	}
 

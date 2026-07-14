@@ -38,6 +38,8 @@ internal enum MacOSMenuCommand
 	OpenInNewTab,
 	Duplicate,
 	CreateSymbolicLink,
+	NewWindow,
+	CloseWindow,
 }
 
 internal interface IMacOSMenuCommandTarget
@@ -51,13 +53,18 @@ internal sealed unsafe class MacOSMainMenuService : IDisposable
 {
 	private GCHandle contextHandle;
 	private IMacOSMenuCommandTarget? target;
+	private Microsoft.UI.Dispatching.DispatcherQueue? dispatcherQueue;
 	private readonly int[] commandStates = Enumerable.Repeat(1, Enum.GetValues<MacOSMenuCommand>().Max(static command => (int)command) + 1).ToArray();
 
-	public void Install(IMacOSMenuCommandTarget commandTarget, bool useSimplifiedChinese)
+	public void Install(
+		IMacOSMenuCommandTarget commandTarget,
+		bool useSimplifiedChinese,
+		Microsoft.UI.Dispatching.DispatcherQueue callbackDispatcherQueue)
 	{
 		ArgumentNullException.ThrowIfNull(commandTarget);
 		Dispose();
 		target = commandTarget;
+		dispatcherQueue = callbackDispatcherQueue;
 		contextHandle = GCHandle.Alloc(this);
 		MacOSNativeMethods.InstallMainMenu(
 			useSimplifiedChinese ? "zh-Hans" : "en",
@@ -82,6 +89,7 @@ internal sealed unsafe class MacOSMainMenuService : IDisposable
 			contextHandle.Free();
 		}
 		target = null;
+		dispatcherQueue = null;
 	}
 
 	public string Describe()
@@ -111,10 +119,7 @@ internal sealed unsafe class MacOSMainMenuService : IDisposable
 		}
 
 		IMacOSMenuCommandTarget target = service.target;
-		if (target is DependencyObject dependencyObject)
-		{
-			dependencyObject.DispatcherQueue.TryEnqueue(() => target.ExecuteMenuCommand((MacOSMenuCommand)command));
-		}
+		service.dispatcherQueue?.TryEnqueue(() => target.ExecuteMenuCommand((MacOSMenuCommand)command));
 	}
 
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
