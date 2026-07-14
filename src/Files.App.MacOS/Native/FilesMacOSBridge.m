@@ -430,6 +430,8 @@ __attribute__((visibility("default"))) void files_macos_install_main_menu(
 			files_add_menu_command(fileMenu, zh ? @"新建文件夹" : @"New Folder", @"n", NSEventModifierFlagCommand | NSEventModifierFlagShift, 3);
 			files_add_menu_command(fileMenu, zh ? @"打开文件夹…" : @"Open Folder…", @"o", NSEventModifierFlagCommand, 25);
 			files_add_menu_command(fileMenu, zh ? @"关闭标签页" : @"Close Tab", @"w", NSEventModifierFlagCommand, 4);
+			files_add_menu_command(fileMenu, zh ? @"重新打开关闭的标签页" : @"Reopen Closed Tab", @"t", NSEventModifierFlagCommand | NSEventModifierFlagShift, 35);
+			files_add_menu_command(fileMenu, zh ? @"关闭其他标签页" : @"Close Other Tabs", @"", 0, 36);
 			[fileMenu addItem:[NSMenuItem separatorItem]];
 			files_add_menu_command(fileMenu, zh ? @"显示简介" : @"Get Info", @"i", NSEventModifierFlagCommand, 5);
 			files_add_menu_command(fileMenu, zh ? @"打开方式…" : @"Open With…", @"", 0, 29);

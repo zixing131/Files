@@ -490,4 +490,7 @@
   <data name="NoSearchResultsDescription.Text" xml:space="preserve"><value>请尝试其他名称或调整搜索筛选条件。</value></data>
   <data name="GridViewTooltip" xml:space="preserve"><value>网格视图</value></data>
   <data name="DetailsViewTooltip" xml:space="preserve"><value>详细信息视图</value></data>
+  <data name="ReopenClosedTabMenuItem.Text" xml:space="preserve"><value>重新打开关闭的标签页</value></data>
+  <data name="CloseTabMenuItem.Text" xml:space="preserve"><value>关闭标签页</value></data>
+  <data name="CloseOtherTabsMenuItem.Text" xml:space="preserve"><value>关闭其他标签页</value></data>
 </root>

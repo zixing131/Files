@@ -8,7 +8,9 @@ namespace Files.App.MacOS.ViewModels;
 
 public sealed class MainPageViewModel : ObservableObject
 {
+	private const int MaximumClosedTabHistory = 20;
 	private readonly ResourceLoader resources = ResourceLoader.GetForViewIndependentUse();
+	private readonly List<BrowserTabState> closedTabs = [];
 	private BrowserTabViewModel? activeTab;
 	private AppSettings settings = new();
 	private bool isRestoringWorkspace;
@@ -24,6 +26,8 @@ public sealed class MainPageViewModel : ObservableObject
 	public ObservableCollection<SidebarLocation> Locations { get; } = [];
 
 	public bool HasRecentLocations => hasRecentLocations;
+
+	public bool CanReopenClosedTab => closedTabs.Count > 0;
 
 	public event EventHandler? WorkspaceChanged;
 
@@ -157,6 +161,12 @@ public sealed class MainPageViewModel : ObservableObject
 		}
 
 		int index = Tabs.IndexOf(tab);
+		if (index < 0)
+		{
+			return;
+		}
+
+		RememberClosedTab(CaptureTabState(tab));
 		Tabs.Remove(tab);
 		tab.StateChanged -= Tab_StateChanged;
 		tab.Dispose();
@@ -164,14 +174,92 @@ public sealed class MainPageViewModel : ObservableObject
 		OnWorkspaceChanged();
 	}
 
+	public void CloseOtherTabs(BrowserTabViewModel tab)
+	{
+		int retainedIndex = Tabs.IndexOf(tab);
+		if (retainedIndex < 0 || Tabs.Count <= 1)
+		{
+			return;
+		}
+
+		BrowserTabViewModel[] tabsToClose = Tabs.Where(candidate => !ReferenceEquals(candidate, tab)).ToArray();
+		IEnumerable<BrowserTabViewModel> reopenOrder = tabsToClose
+			.Where(candidate => Tabs.IndexOf(candidate) > retainedIndex)
+			.Concat(tabsToClose.Where(candidate => Tabs.IndexOf(candidate) < retainedIndex).Reverse());
+		foreach (BrowserTabViewModel closedTab in reopenOrder.Reverse())
+		{
+			RememberClosedTab(CaptureTabState(closedTab));
+		}
+
+		foreach (BrowserTabViewModel closedTab in tabsToClose)
+		{
+			Tabs.Remove(closedTab);
+			closedTab.StateChanged -= Tab_StateChanged;
+			closedTab.Dispose();
+		}
+
+		ActiveTab = tab;
+		OnWorkspaceChanged();
+	}
+
+	public async Task ReopenClosedTabAsync()
+	{
+		if (closedTabs.Count is 0)
+		{
+			return;
+		}
+
+		int historyIndex = closedTabs.Count - 1;
+		BrowserTabState state = closedTabs[historyIndex];
+		int initialTabCount = Tabs.Count;
+		closedTabs.RemoveAt(historyIndex);
+		OnPropertyChanged(nameof(CanReopenClosedTab));
+		try
+		{
+			await RestoreTabAsync(state);
+			ActiveTab = Tabs[^1];
+			OnWorkspaceChanged();
+		}
+		catch
+		{
+			while (Tabs.Count > initialTabCount)
+			{
+				BrowserTabViewModel incompleteTab = Tabs[^1];
+				Tabs.RemoveAt(Tabs.Count - 1);
+				incompleteTab.StateChanged -= Tab_StateChanged;
+				incompleteTab.Dispose();
+			}
+
+			closedTabs.Add(state);
+			OnPropertyChanged(nameof(CanReopenClosedTab));
+			throw;
+		}
+	}
+
 	public WorkspaceState CaptureWorkspaceState()
 	{
-		BrowserTabState[] tabs = Tabs.Select(tab => new BrowserTabState(
+		BrowserTabState[] tabs = Tabs.Select(CaptureTabState).ToArray();
+		return new(tabs, Math.Max(0, ActiveTab is null ? 0 : Tabs.IndexOf(ActiveTab)));
+	}
+
+	private static BrowserTabState CaptureTabState(BrowserTabViewModel tab)
+	{
+		return new(
 			CapturePane(tab.Browser),
 			tab.SecondaryBrowser is null ? null : CapturePane(tab.SecondaryBrowser),
 			tab.SplitRatio,
-			ReferenceEquals(tab.ActiveBrowser, tab.SecondaryBrowser))).ToArray();
-		return new(tabs, Math.Max(0, ActiveTab is null ? 0 : Tabs.IndexOf(ActiveTab)));
+			ReferenceEquals(tab.ActiveBrowser, tab.SecondaryBrowser));
+	}
+
+	private void RememberClosedTab(BrowserTabState state)
+	{
+		closedTabs.Add(state);
+		if (closedTabs.Count > MaximumClosedTabHistory)
+		{
+			closedTabs.RemoveAt(0);
+		}
+
+		OnPropertyChanged(nameof(CanReopenClosedTab));
 	}
 
 	private async Task RestoreTabAsync(BrowserTabState state)

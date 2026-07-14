@@ -490,4 +490,7 @@
   <data name="NoSearchResultsDescription.Text" xml:space="preserve"><value>Try a different name or adjust the search filters.</value></data>
   <data name="GridViewTooltip" xml:space="preserve"><value>Grid view</value></data>
   <data name="DetailsViewTooltip" xml:space="preserve"><value>Details view</value></data>
+  <data name="ReopenClosedTabMenuItem.Text" xml:space="preserve"><value>Reopen closed tab</value></data>
+  <data name="CloseTabMenuItem.Text" xml:space="preserve"><value>Close tab</value></data>
+  <data name="CloseOtherTabsMenuItem.Text" xml:space="preserve"><value>Close other tabs</value></data>
 </root>

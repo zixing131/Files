@@ -364,7 +364,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			mergeBaseline with { RecentPaths = ["requested-recent"] });
 		bool multiWindowSettingsMerge = mergedConcurrentSettings.FavoritePaths is ["newer-favorite"] &&
 			mergedConcurrentSettings.RecentPaths is ["requested-recent"];
-		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip, bool securityPropertiesRoundtrip, bool openWithRoundtrip, bool recentLocationsRoundtrip, bool duplicateRoundtrip, bool newTabRoundtrip, bool symbolicLinkRoundtrip) = await RunFileMutationDiagnosticsAsync();
+		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip, bool securityPropertiesRoundtrip, bool openWithRoundtrip, bool recentLocationsRoundtrip, bool duplicateRoundtrip, bool newTabRoundtrip, bool tabHistoryRoundtrip, bool symbolicLinkRoundtrip) = await RunFileMutationDiagnosticsAsync();
 
 		using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
 		Console.WriteLine(
@@ -373,7 +373,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
+			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_history={tabHistoryRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -387,7 +387,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"inverted_count={selectedItems.Count} elapsed_ms={selectionTimer.Elapsed.TotalMilliseconds:F1}");
 	}
 
-	private async Task<(bool PermanentDelete, bool MetadataEdit, bool SecurityProperties, bool OpenWith, bool RecentLocations, bool Duplicate, bool NewTab, bool SymbolicLink)> RunFileMutationDiagnosticsAsync()
+	private async Task<(bool PermanentDelete, bool MetadataEdit, bool SecurityProperties, bool OpenWith, bool RecentLocations, bool Duplicate, bool NewTab, bool TabHistory, bool SymbolicLink)> RunFileMutationDiagnosticsAsync()
 	{
 		string root = Path.Combine(Path.GetTempPath(), $"files-macos-diagnostics-{Guid.NewGuid():N}");
 		try
@@ -567,11 +567,36 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			await tabViewModel.NewTabAsync(root);
 			bool newTab = tabViewModel.Tabs.Count == initialTabCount + 1 &&
 				tabViewModel.ActiveTab?.Browser.CurrentPath == root;
+			bool tabHistory = false;
 			if (tabViewModel.ActiveTab is BrowserTabViewModel diagnosticTab)
 			{
+				diagnosticTab.Browser.IsGridView = false;
+				diagnosticTab.Browser.SetSort(FileSortField.Size, FileSortDirection.Descending);
+				await tabViewModel.ToggleSplitViewAsync();
+				diagnosticTab.SplitRatio = 0.7;
+				BrowserTabState expectedState = tabViewModel.CaptureWorkspaceState().Tabs![^1];
 				tabViewModel.CloseTab(diagnosticTab);
+				tabHistory = tabViewModel.CanReopenClosedTab && tabViewModel.Tabs.Count == initialTabCount;
+				await tabViewModel.ReopenClosedTabAsync();
+				tabHistory &= tabViewModel.Tabs.Count == initialTabCount + 1 &&
+					tabViewModel.ActiveTab is BrowserTabViewModel reopenedTab &&
+					tabViewModel.CaptureWorkspaceState().Tabs![^1] == expectedState &&
+					ReferenceEquals(reopenedTab.ActiveBrowser, reopenedTab.SecondaryBrowser);
+				if (tabViewModel.ActiveTab is BrowserTabViewModel reopened)
+				{
+					tabViewModel.CloseTab(reopened);
+				}
 			}
 			newTab &= tabViewModel.Tabs.Count == initialTabCount;
+			string adjacentTabPath = Path.Combine(root, "adjacent-tab");
+			Directory.CreateDirectory(adjacentTabPath);
+			await tabViewModel.NewTabAsync(root);
+			BrowserTabViewModel retainedTab = tabViewModel.ActiveTab!;
+			await tabViewModel.NewTabAsync(adjacentTabPath);
+			tabViewModel.CloseOtherTabs(retainedTab);
+			tabHistory &= tabViewModel.Tabs is [var remainingTab] && ReferenceEquals(remainingTab, retainedTab);
+			await tabViewModel.ReopenClosedTabAsync();
+			tabHistory &= tabViewModel.Tabs.Count == 2 && tabViewModel.ActiveBrowser?.CurrentPath == adjacentTabPath;
 			foreach (BrowserTabViewModel tab in tabViewModel.Tabs.ToArray())
 			{
 				tab.Dispose();
@@ -631,12 +656,12 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			{
 				symbolicLink &= File.Exists(links[1].Path) || Directory.Exists(links[1].Path);
 			}
-			return (permanentDelete, metadataEdit, securityProperties, openWith, recentLocations, duplicate, newTab, symbolicLink);
+			return (permanentDelete, metadataEdit, securityProperties, openWith, recentLocations, duplicate, newTab, tabHistory, symbolicLink);
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 		{
 			Console.Error.WriteLine($"FILES_MACOS_MUTATION_ERROR type={ex.GetType().Name} message={ex.Message}");
-			return (false, false, false, false, false, false, false, false);
+			return (false, false, false, false, false, false, false, false, false);
 		}
 		finally
 		{
@@ -806,6 +831,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			MacOSMenuCommand.NewWindow => true,
 			MacOSMenuCommand.CloseWindow => true,
 			MacOSMenuCommand.CloseTab => isIdle && ViewModel.Tabs.Count > 1,
+			MacOSMenuCommand.ReopenClosedTab => isIdle && ViewModel.CanReopenClosedTab,
+			MacOSMenuCommand.CloseOtherTabs => isIdle && ViewModel.Tabs.Count > 1,
 			MacOSMenuCommand.Properties or MacOSMenuCommand.MoveToTrash or MacOSMenuCommand.DeletePermanently or MacOSMenuCommand.Rename or
 				MacOSMenuCommand.Cut or MacOSMenuCommand.Copy or MacOSMenuCommand.CopyPath => isIdle && selectedItems.Count > 0,
 			MacOSMenuCommand.OpenWith => isIdle && selectedItems is [LocalFileSystemItem { IsDirectory: false }],
@@ -844,6 +871,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				break;
 			case MacOSMenuCommand.CloseTab when ViewModel.ActiveTab is BrowserTabViewModel tab:
 				ViewModel.CloseTab(tab);
+				break;
+			case MacOSMenuCommand.ReopenClosedTab:
+				await ReopenClosedTabAsync();
+				break;
+			case MacOSMenuCommand.CloseOtherTabs when ViewModel.ActiveTab is BrowserTabViewModel retainedTab:
+				ViewModel.CloseOtherTabs(retainedTab);
+				UpdateCommandStates();
 				break;
 			case MacOSMenuCommand.Properties:
 				PropertiesButton_Click(PropertiesButton, args);
@@ -1409,6 +1443,15 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	{
 		args.Handled = true;
 		((App)Application.Current).CloseWindow(this);
+	}
+
+	private async void ReopenClosedTabAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (!IsTextInputFocused() && ViewModel.CanReopenClosedTab && fileTransferCancellation is null)
+		{
+			args.Handled = true;
+			await ReopenClosedTabAsync();
+		}
 	}
 
 	private bool CanDuplicateSelection()
@@ -3825,6 +3868,49 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		if (sender is Button button)
 		{
 			ConfigureIconButton(button, "CloseTabTooltip");
+		}
+	}
+
+	private void TabContextFlyout_Opening(object sender, object e)
+	{
+		if (sender is MenuFlyout { Items.Count: >= 4 } flyout)
+		{
+			bool isIdle = fileTransferCancellation is null && !isHistoryOperationRunning && !isConnectingServer;
+			flyout.Items[0].IsEnabled = isIdle && ViewModel.CanReopenClosedTab;
+			flyout.Items[2].IsEnabled = isIdle && ViewModel.Tabs.Count > 1;
+			flyout.Items[3].IsEnabled = isIdle && ViewModel.Tabs.Count > 1;
+		}
+	}
+
+	private async void ReopenClosedTabMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		await ReopenClosedTabAsync();
+	}
+
+	private void CloseTabMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		if (fileTransferCancellation is null && sender is MenuFlyoutItem { Tag: BrowserTabViewModel tab })
+		{
+			ViewModel.CloseTab(tab);
+			UpdateCommandStates();
+		}
+	}
+
+	private void CloseOtherTabsMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		if (fileTransferCancellation is null && sender is MenuFlyoutItem { Tag: BrowserTabViewModel tab })
+		{
+			ViewModel.CloseOtherTabs(tab);
+			UpdateCommandStates();
+		}
+	}
+
+	private async Task ReopenClosedTabAsync()
+	{
+		if (fileTransferCancellation is null && !isHistoryOperationRunning && !isConnectingServer && ViewModel.CanReopenClosedTab)
+		{
+			await ViewModel.ReopenClosedTabAsync();
+			UpdateCommandStates();
 		}
 	}
 

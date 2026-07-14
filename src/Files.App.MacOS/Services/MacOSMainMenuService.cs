@@ -40,6 +40,8 @@ internal enum MacOSMenuCommand
 	CreateSymbolicLink,
 	NewWindow,
 	CloseWindow,
+	ReopenClosedTab,
+	CloseOtherTabs,
 }
 
 internal interface IMacOSMenuCommandTarget

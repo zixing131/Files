@@ -26,6 +26,7 @@
 		<KeyboardAccelerator Key="D" Modifiers="Control,Shift" Invoked="SplitViewAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Delete" Modifiers="Shift" Invoked="PermanentDeleteAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Enter" Modifiers="Control" Invoked="OpenInNewTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="T" Modifiers="Control,Shift" Invoked="ReopenClosedTabAccelerator_Invoked" />
 		<!--  Uno maps the macOS Command key to the WinUI Windows modifier.  -->
 		<KeyboardAccelerator Key="C" Modifiers="Windows" Invoked="CopyAccelerator_Invoked" />
 		<KeyboardAccelerator Key="X" Modifiers="Windows" Invoked="CutAccelerator_Invoked" />
@@ -43,6 +44,7 @@
 		<KeyboardAccelerator Key="L" Modifiers="Windows,Menu" Invoked="CreateSymbolicLinkAccelerator_Invoked" />
 		<KeyboardAccelerator Key="N" Modifiers="Windows" Invoked="NewWindowAccelerator_Invoked" />
 		<KeyboardAccelerator Key="W" Modifiers="Windows,Shift" Invoked="CloseWindowAccelerator_Invoked" />
+		<KeyboardAccelerator Key="T" Modifiers="Windows,Shift" Invoked="ReopenClosedTabAccelerator_Invoked" />
 	</Page.KeyboardAccelerators>
 
 	<Grid RowDefinitions="44,48,*">
@@ -61,6 +63,14 @@
 			<TabView.TabItemTemplate>
 				<DataTemplate x:DataType="viewmodels:BrowserTabViewModel">
 					<TabViewItem IsClosable="False">
+						<TabViewItem.ContextFlyout>
+							<MenuFlyout Opening="TabContextFlyout_Opening">
+								<MenuFlyoutItem x:Uid="ReopenClosedTabMenuItem" Click="ReopenClosedTabMenuItem_Click" />
+								<MenuFlyoutSeparator />
+								<MenuFlyoutItem x:Uid="CloseTabMenuItem" Click="CloseTabMenuItem_Click" Tag="{Binding}" />
+								<MenuFlyoutItem x:Uid="CloseOtherTabsMenuItem" Click="CloseOtherTabsMenuItem_Click" Tag="{Binding}" />
+							</MenuFlyout>
+						</TabViewItem.ContextFlyout>
 						<TabViewItem.Header>
 							<StackPanel Orientation="Horizontal" Spacing="7">
 								<PathIcon Width="16" Height="16" Data="M2,4 H8 L10,6 H18 V17 H2 Z M4,8 V15 H16 V8 Z" />
