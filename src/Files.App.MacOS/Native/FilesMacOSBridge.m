@@ -195,6 +195,7 @@ static void files_update_window_placement_cache(NSWindow *window)
 		@"Width": @(frame.size.width),
 		@"Height": @(frame.size.height),
 		@"IsMaximized": @(window.isZoomed),
+		@"UsesUnifiedTitleBar": ((window.styleMask & NSWindowStyleMaskFullSizeContentView) != 0 && window.titleVisibility == NSWindowTitleHidden) ? @YES : @NO,
 	};
 	@synchronized([NSWindow class])
 	{
@@ -273,6 +274,11 @@ __attribute__((visibility("default"))) int files_macos_register_window(void *win
 		if ([window isKindOfClass:NSWindow.class])
 		{
 			window.identifier = value;
+			window.titleVisibility = NSWindowTitleHidden;
+			window.titlebarAppearsTransparent = YES;
+			window.titlebarSeparatorStyle = NSTitlebarSeparatorStyleNone;
+			window.styleMask |= NSWindowStyleMaskFullSizeContentView;
+			window.tabbingMode = NSWindowTabbingModeDisallowed;
 			if (windowObserver == nil)
 			{
 				windowObserver = [FilesWindowObserver new];

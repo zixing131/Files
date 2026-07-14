@@ -47,10 +47,11 @@
 
 	<Grid RowDefinitions="44,48,*">
 		<!--  Tab strip  -->
+		<Border x:Name="TitleBarBackground" Grid.Row="0" Background="{ThemeResource FilesBackgroundBrush}" />
 		<TabView
 			x:Name="Tabs"
 			Grid.Row="0"
-			Margin="4,4,4,0"
+			Margin="76,4,4,0"
 			AddTabButtonClick="Tabs_AddTabButtonClick"
 			IsAddTabButtonVisible="False"
 			SelectedItem="{Binding ActiveTab, Mode=TwoWay}"
@@ -81,6 +82,7 @@
 
 		<!--  Address toolbar  -->
 		<Grid
+			x:Name="AddressToolbarGrid"
 			Grid.Row="1"
 			Padding="8,6"
 			Background="{ThemeResource FilesToolbarBrush}"

@@ -304,6 +304,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		await Task.Delay(750);
 		App app = (App)Application.Current;
 		MainPage renderedSidebarPage = app.ActivePage ?? this;
+		bool unifiedTitleBar = app.WindowsUseUnifiedTitleBars;
+		bool titleBarLayout = Math.Abs(TitleBarBackground.ActualHeight - 44) < 0.1 &&
+			Tabs.Margin.Left >= 72 && Math.Abs(AddressToolbarGrid.ActualHeight - 48) < 0.1;
 		bool sidebarLabels = renderedSidebarPage.ViewModel.Locations.Count > 0 &&
 			renderedSidebarPage.ViewModel.Locations.All(static location => !string.IsNullOrWhiteSpace(location.Name));
 		var sidebarLabelNames = renderedSidebarPage.ViewModel.Locations.Select(static location => location.Name).ToHashSet(StringComparer.CurrentCulture);
@@ -369,7 +372,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"items={browser.Items.Count} realized={realizedContainers} selection_roundtrip={selectionRoundtrip} " +
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
-			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
+			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
 			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");

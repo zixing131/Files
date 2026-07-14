@@ -47,6 +47,36 @@ internal static class MacOSWindowPlacementService
 		}
 	}
 
+	public static bool UsesUnifiedTitleBar(string identifier)
+	{
+		nint pointer = MacOSNativeMethods.GetWindowPlacement(identifier);
+		if (pointer == 0)
+		{
+			return false;
+		}
+
+		try
+		{
+			string? json = Marshal.PtrToStringUTF8(pointer);
+			if (string.IsNullOrWhiteSpace(json))
+			{
+				return false;
+			}
+
+			using JsonDocument document = JsonDocument.Parse(json);
+			return document.RootElement.TryGetProperty("UsesUnifiedTitleBar", out JsonElement value) &&
+				(value.ValueKind is JsonValueKind.True || value.ValueKind is JsonValueKind.Number && value.GetInt32() != 0);
+		}
+		catch (JsonException)
+		{
+			return false;
+		}
+		finally
+		{
+			MacOSNativeMethods.Free(pointer);
+		}
+	}
+
 	public static bool ApplyPlacement(string identifier, WindowPlacementState placement)
 	{
 		return MacOSNativeMethods.SetWindowPlacement(

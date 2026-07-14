@@ -41,6 +41,8 @@ public partial class App : Application, IMacOSMenuCommandTarget
 
 	internal MainPage? ActivePage => activePage;
 
+	internal bool WindowsUseUnifiedTitleBars => nativeWindowIdentifiers.Values.All(MacOSWindowPlacementService.UsesUnifiedTitleBar);
+
 	internal Window CreateWindow(
 		bool restoreWorkspace = false,
 		WorkspaceState? initialWorkspace = null,
