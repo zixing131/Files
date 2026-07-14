@@ -201,7 +201,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		bool nativeMenuRouting = menuFirstInvoke && menuSecondInvoke && menuChangedSidebar && isSidebarOpen == menuInitialSidebarState;
 		int commandAccelerators = KeyboardAccelerators.Count(accelerator =>
 			accelerator.Modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Windows));
-		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip, bool openWithRoundtrip, bool recentLocationsRoundtrip, bool duplicateRoundtrip, bool newTabRoundtrip) = await RunFileMutationDiagnosticsAsync();
+		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip, bool openWithRoundtrip, bool recentLocationsRoundtrip, bool duplicateRoundtrip, bool newTabRoundtrip, bool symbolicLinkRoundtrip) = await RunFileMutationDiagnosticsAsync();
 
 		using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
 		Console.WriteLine(
@@ -210,7 +210,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} " +
+			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -224,7 +224,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"inverted_count={selectedItems.Count} elapsed_ms={selectionTimer.Elapsed.TotalMilliseconds:F1}");
 	}
 
-	private async Task<(bool PermanentDelete, bool MetadataEdit, bool OpenWith, bool RecentLocations, bool Duplicate, bool NewTab)> RunFileMutationDiagnosticsAsync()
+	private async Task<(bool PermanentDelete, bool MetadataEdit, bool OpenWith, bool RecentLocations, bool Duplicate, bool NewTab, bool SymbolicLink)> RunFileMutationDiagnosticsAsync()
 	{
 		string root = Path.Combine(Path.GetTempPath(), $"files-macos-diagnostics-{Guid.NewGuid():N}");
 		try
@@ -325,11 +325,66 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			{
 				tab.Dispose();
 			}
-			return (permanentDelete, metadataEdit, openWith, recentLocations, duplicate, newTab);
+
+			string ephemeralSource = Path.Combine(root, "ephemeral.txt");
+			await File.WriteAllTextAsync(ephemeralSource, "temporary");
+			string rollbackLinkPath = Path.Combine(root, "rollback - Link.txt");
+			bool symbolicLink = false;
+			try
+			{
+				await FileOperationService.CreateSymbolicLinksAsync(
+				[
+					new(metadataPath, Path.GetFileName(rollbackLinkPath)),
+					new(ephemeralSource, "invalid/name"),
+				],
+				root);
+			}
+			catch (FileOperationException ex) when (ex.Error is FileOperationError.InvalidCharacters)
+			{
+				symbolicLink = !File.Exists(rollbackLinkPath) && new FileInfo(rollbackLinkPath).LinkTarget is null;
+			}
+			IReadOnlyList<CreatedSymbolicLink> links = await FileOperationService.CreateSymbolicLinksAsync(
+			[
+				new(metadataPath, "metadata - Link.txt"),
+				new(linkTarget, "directory - Link"),
+				new(ephemeralSource, "broken - Link.txt"),
+			],
+			root);
+			File.Delete(ephemeralSource);
+			symbolicLink &= links is [var fileLink, var directoryLinkResult, var brokenLink] &&
+				File.ReadAllText(fileLink.Path) == "diagnostic" && Directory.Exists(directoryLinkResult.Path) &&
+				new FileInfo(brokenLink.Path).LinkTarget == brokenLink.LinkTarget;
+			await FileOperationService.ReplaySymbolicLinksAsync(links, isUndo: true);
+			symbolicLink &= links.All(link => !File.Exists(link.Path) && !Directory.Exists(link.Path) && new FileInfo(link.Path).LinkTarget is null) &&
+				File.Exists(metadataPath) && Directory.Exists(linkTarget);
+			await File.WriteAllTextAsync(links[0].Path, "conflict");
+			try
+			{
+				await FileOperationService.ReplaySymbolicLinksAsync(links, isUndo: false);
+				symbolicLink = false;
+			}
+			catch (FileOperationException ex) when (ex.Error is FileOperationError.AlreadyExists)
+			{
+				symbolicLink &= !File.Exists(links[1].Path) && !Directory.Exists(links[1].Path);
+			}
+			File.Delete(links[0].Path);
+			await FileOperationService.ReplaySymbolicLinksAsync(links, isUndo: false);
+			File.Delete(links[0].Path);
+			File.CreateSymbolicLink(links[0].Path, "settings.json");
+			try
+			{
+				await FileOperationService.ReplaySymbolicLinksAsync(links, isUndo: true);
+				symbolicLink = false;
+			}
+			catch (FileOperationException ex) when (ex.Error is FileOperationError.CreatedItemChanged)
+			{
+				symbolicLink &= File.Exists(links[1].Path) || Directory.Exists(links[1].Path);
+			}
+			return (permanentDelete, metadataEdit, openWith, recentLocations, duplicate, newTab, symbolicLink);
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 		{
-			return (false, false, false, false, false, false);
+			return (false, false, false, false, false, false, false);
 		}
 		finally
 		{
@@ -471,6 +526,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			MacOSMenuCommand.OpenWith => isIdle && selectedItems is [LocalFileSystemItem { IsDirectory: false }],
 			MacOSMenuCommand.OpenInNewTab => isIdle && selectedItems is [LocalFileSystemItem { IsDirectory: true }],
 			MacOSMenuCommand.Duplicate => isIdle && CanDuplicateSelection(),
+			MacOSMenuCommand.CreateSymbolicLink => isIdle && selectedItems.Count > 0,
 			MacOSMenuCommand.Paste => PasteButton.IsEnabled,
 			MacOSMenuCommand.Undo => isIdle && undoHistory.Count > 0,
 			MacOSMenuCommand.Redo => isIdle && redoHistory.Count > 0,
@@ -515,6 +571,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				break;
 			case MacOSMenuCommand.Duplicate:
 				await DuplicateSelectedItemsAsync();
+				break;
+			case MacOSMenuCommand.CreateSymbolicLink:
+				await CreateSymbolicLinksAsync();
 				break;
 			case MacOSMenuCommand.Rename:
 				RenameButton_Click(RenameButton, args);
@@ -1040,6 +1099,15 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private async void CreateSymbolicLinkAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (!IsTextInputFocused() && selectedItems.Count > 0 && fileTransferCancellation is null)
+		{
+			args.Handled = true;
+			await CreateSymbolicLinksAsync();
+		}
+	}
+
 	private bool CanDuplicateSelection()
 	{
 		if (Browser is not DirectoryBrowserViewModel browser || selectedItems.Count is 0)
@@ -1081,6 +1149,43 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			string name = Path.GetFileNameWithoutExtension(item.Name);
 			string extension = Path.GetExtension(item.Name);
 			return string.Format(GetResource("DuplicateNameFormat"), name) + extension;
+		}
+	}
+
+	private async Task CreateSymbolicLinksAsync()
+	{
+		if (Browser is not DirectoryBrowserViewModel browser || selectedItems.Count is 0 || fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		LocalFileSystemItem[] items = selectedItems.ToArray();
+		SymbolicLinkRequest[] requests = items.Select(item => new SymbolicLinkRequest(item.Path, GetLinkName(item))).ToArray();
+		try
+		{
+			IReadOnlyList<CreatedSymbolicLink> links = await FileOperationService.CreateSymbolicLinksAsync(requests, browser.CurrentPath);
+			RecordSymbolicLinkHistory(links.ToArray());
+			await browser.RefreshAsync();
+			browser.StatusText = string.Format(GetResource("SymbolicLinksCreatedFormat"), links.Count);
+		}
+		catch (FileOperationException ex)
+		{
+			await ShowErrorAsync(GetFileOperationError(ex));
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			await ShowErrorAsync(string.IsNullOrWhiteSpace(ex.Message) ? GetResource("CreateSymbolicLinkErrorMessage") : ex.Message);
+		}
+
+		string GetLinkName(LocalFileSystemItem item)
+		{
+			if (item.IsDirectory)
+			{
+				return string.Format(GetResource("SymbolicLinkNameFormat"), item.Name);
+			}
+			string name = Path.GetFileNameWithoutExtension(item.Name);
+			string extension = Path.GetExtension(item.Name);
+			return string.Format(GetResource("SymbolicLinkNameFormat"), name) + extension;
 		}
 	}
 
@@ -1849,6 +1954,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				case "Duplicate":
 					await DuplicateSelectedItemsAsync();
 					break;
+				case "CreateSymbolicLink":
+					await CreateSymbolicLinksAsync();
+					break;
 				case "CopyPath":
 					CopySelectedPaths();
 					break;
@@ -1901,6 +2009,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				"OpenInNewTab" => isIdle && selectedItems is [LocalFileSystemItem { IsDirectory: true }],
 				"Terminal" => isIdle && selectedItems.Count > 0,
 				"Duplicate" => isIdle && CanDuplicateSelection(),
+				"CreateSymbolicLink" => isIdle && selectedItems.Count > 0,
 				"Cut" or "Copy" or "CopyPath" or "Rename" or "Share" or "Delete" or
 					"PermanentDelete" or "Properties" or "Compress" => isIdle && selectedItems.Count > 0,
 				"Extract" => isIdle && selectedItems is [LocalFileSystemItem archive] && IsZipArchive(archive),
@@ -2458,6 +2567,17 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		UpdateCommandStates();
 	}
 
+	private void RecordSymbolicLinkHistory(CreatedSymbolicLink[] links)
+	{
+		if (links.Length is 0)
+		{
+			return;
+		}
+		undoHistory.Push(new([], SymbolicLinks: links));
+		DiscardRedoHistory();
+		UpdateCommandStates();
+	}
+
 	private void RecordTransferHistory(FileTransferMode mode, FileTransferRootResult[] roots)
 	{
 		if (roots.Length is 0)
@@ -2563,6 +2683,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			else if (historyEntry.Trash is FileTrashHistoryEntry trash)
 			{
 				await FileTrashHistoryService.ReplayAsync(trash, isUndo);
+			}
+			else if (historyEntry.SymbolicLinks is CreatedSymbolicLink[] links)
+			{
+				await FileOperationService.ReplaySymbolicLinksAsync(links, isUndo);
 			}
 			else if (historyEntry.CreatedPath is string createdPath)
 			{
@@ -3796,6 +3920,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			FileOperationError.UndoDataUnavailable => GetResource("UndoDataUnavailableMessage"),
 			FileOperationError.HistoryTransferIncomplete => GetResource("HistoryTransferIncompleteMessage"),
 			FileOperationError.HistoryRollbackFailed => GetResource("HistoryRollbackFailedMessage"),
+			FileOperationError.CreatedItemChanged => GetResource("CreatedItemChangedUndoErrorMessage"),
 			_ => GetResource("UnknownFileOperationErrorMessage"),
 		};
 	}

@@ -380,6 +380,10 @@
   <data name="ContextOpenInNewTabItem.Text" xml:space="preserve"><value>Open in new tab</value></data>
   <data name="ContextDuplicateItem.Text" xml:space="preserve"><value>Duplicate</value></data>
   <data name="DuplicateNameFormat" xml:space="preserve"><value>{0} - Copy</value></data>
+  <data name="ContextCreateSymbolicLinkItem.Text" xml:space="preserve"><value>Make symbolic link</value></data>
+  <data name="SymbolicLinkNameFormat" xml:space="preserve"><value>{0} - Link</value></data>
+  <data name="SymbolicLinksCreatedFormat" xml:space="preserve"><value>Created {0} symbolic link(s).</value></data>
+  <data name="CreateSymbolicLinkErrorMessage" xml:space="preserve"><value>The symbolic links couldn't be created.</value></data>
   <data name="OpenWithDialogTitle" xml:space="preserve"><value>Open with</value></data>
   <data name="OpenWithDescriptionFormat" xml:space="preserve"><value>Choose an application to open “{0}”.</value></data>
   <data name="DefaultApplicationLabel" xml:space="preserve"><value>Default</value></data>

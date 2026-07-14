@@ -11,6 +11,7 @@ public enum FileOperationError
 	UndoDataUnavailable,
 	HistoryTransferIncomplete,
 	HistoryRollbackFailed,
+	CreatedItemChanged,
 }
 
 public sealed class FileOperationException(FileOperationError error, string? itemName = null) : IOException(error.ToString())

@@ -12,7 +12,21 @@ public interface IFileOperationService
 		IReadOnlyList<string> paths,
 		CancellationToken cancellationToken = default);
 
+	Task<IReadOnlyList<CreatedSymbolicLink>> CreateSymbolicLinksAsync(
+		IReadOnlyList<SymbolicLinkRequest> requests,
+		string destinationDirectory,
+		CancellationToken cancellationToken = default);
+
+	Task ReplaySymbolicLinksAsync(
+		IReadOnlyList<CreatedSymbolicLink> links,
+		bool isUndo,
+		CancellationToken cancellationToken = default);
+
 }
+
+public sealed record SymbolicLinkRequest(string SourcePath, string DesiredName);
+
+public sealed record CreatedSymbolicLink(string Path, string LinkTarget, bool IsDirectory);
 
 public sealed class PermanentDeletePartialException(
 	string failedPath,

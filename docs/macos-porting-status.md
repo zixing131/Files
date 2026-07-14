@@ -69,8 +69,9 @@ Started on 2026-07-14.
 | Sidebar navigation fidelity | Passed runtime round trips | The longest matching sidebar path follows the active pane (for example Downloads takes precedence over Home), section headers expose portable disclosure glyphs, Favorites/Recent/Libraries/Network/Drives collapse independently, and section state persists through schema v9 |
 | Open With integration | Passed native/runtime enumeration checks | Launch Services supplies the compatible application list with the default first; item context and native File menus open a localized chooser, an AppKit panel can select another `.app`, and both native entry points are architecture-matched |
 | Recent locations | Passed isolated persistence/runtime checks | Successful navigation records up to eight non-built-in folders, the collapsible sidebar group avoids duplicates with libraries and mounted volumes, a visible footer action clears history, and schema v9 normalizes invalid section state and duplicate paths |
-| Native macOS menus and shortcuts | Passed native/runtime checks | Localized application, File, Edit, View, Go and Window menus route through the existing command layer with live validation snapshots; native callback round trips passed, and 13 conventional Command/Command-Shift accelerators coexist with the portable Control bindings |
+| Native macOS menus and shortcuts | Passed native/runtime checks | Localized application, File, Edit, View, Go and Window menus route through the existing command layer with live validation snapshots; native callback round trips passed, and 14 conventional Command/Command-Shift/Command-Option accelerators coexist with the portable Control bindings |
 | Duplicate and open-in-new-tab workflows | Passed isolated/runtime round trips | Command-D and context/native menus create localized, uniquely numbered copies through the transactional transfer engine with Finder metadata and Undo/Redo preserved; Command-Return opens one selected folder in an independent active tab and tab disposal passed lifecycle checks |
+| Symbolic-link creation | Passed file/directory/broken-link history smoke tests | Context/native menus and Command-Option-L create localized, uniquely numbered relative symbolic links in one rollback-safe batch; Undo validates every link before deleting any, Redo refuses conflicts, and changed-link protection leaves the batch untouched |
 
 ### Current vertical slice
 
@@ -105,6 +106,7 @@ Started on 2026-07-14.
 - Strongly confirmed permanent deletion through Shift+Delete, Option-Command-Delete and item context menus, with parent/child normalization, link-safe behavior and partial-batch error reporting.
 - Multi-selection copy, cut and paste with an app-local clipboard.
 - Command-D and item context menus make transactional, metadata-preserving duplicates with localized names, conflict numbering and Undo/Redo.
+- Windows Create Shortcut is mapped to rollback-safe relative symbolic links for files and folders, including localized naming, broken-target handling and guarded Undo/Redo.
 - Two-phase copy/move staging, recursive progress reporting, cancellation and cleanup of incomplete staging items.
 - Root-level `NSFileCoordinator` transactions for copy, move and replacement so iCloud/File Provider presenters can coordinate access before staging and commit.
 - Per-operation conflict handling: keep both with an automatic suffix, replace or skip.

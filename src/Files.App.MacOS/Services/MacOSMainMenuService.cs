@@ -37,6 +37,7 @@ internal enum MacOSMenuCommand
 	OpenWith,
 	OpenInNewTab,
 	Duplicate,
+	CreateSymbolicLink,
 }
 
 internal interface IMacOSMenuCommandTarget

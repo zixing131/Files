@@ -240,6 +240,7 @@ __attribute__((visibility("default"))) void files_macos_install_main_menu(
 			files_add_menu_command(fileMenu, zh ? @"打开方式…" : @"Open With…", @"", 0, 29);
 			files_add_menu_command(fileMenu, zh ? @"重命名" : @"Rename", @"", 0, 7);
 			files_add_menu_command(fileMenu, zh ? @"制作副本" : @"Duplicate", @"d", NSEventModifierFlagCommand, 31);
+			files_add_menu_command(fileMenu, zh ? @"制作符号链接" : @"Make Symbolic Link", @"l", NSEventModifierFlagCommand | NSEventModifierFlagOption, 32);
 			files_add_menu_command(fileMenu, zh ? @"移到废纸篓" : @"Move to Trash", @"\x7F", NSEventModifierFlagCommand, 6);
 			files_add_menu_command(fileMenu, zh ? @"立即删除…" : @"Delete Immediately…", @"\x7F", NSEventModifierFlagCommand | NSEventModifierFlagOption, 28);
 

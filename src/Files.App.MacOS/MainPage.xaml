@@ -37,6 +37,7 @@
 		<KeyboardAccelerator Key="D" Modifiers="Windows,Shift" Invoked="SplitViewAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Enter" Modifiers="Windows" Invoked="OpenInNewTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="D" Modifiers="Windows" Invoked="DuplicateAccelerator_Invoked" />
+		<KeyboardAccelerator Key="L" Modifiers="Windows,Menu" Invoked="CreateSymbolicLinkAccelerator_Invoked" />
 	</Page.KeyboardAccelerators>
 
 	<Grid RowDefinitions="44,48,*">
@@ -406,6 +407,7 @@
 												<MenuFlyoutItem x:Uid="ContextCutItem" Click="ContextAction_Click" Tag="Cut" />
 											<MenuFlyoutItem x:Uid="ContextCopyItem" Click="ContextAction_Click" Tag="Copy" />
 											<MenuFlyoutItem x:Uid="ContextDuplicateItem" Click="ContextAction_Click" Tag="Duplicate" />
+											<MenuFlyoutItem x:Uid="ContextCreateSymbolicLinkItem" Click="ContextAction_Click" Tag="CreateSymbolicLink" />
 											<MenuFlyoutItem x:Uid="ContextCopyPathItem" Click="ContextAction_Click" Tag="CopyPath" />
 												<MenuFlyoutItem x:Uid="ContextRenameItem" Click="ContextAction_Click" Tag="Rename" />
 												<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />
@@ -491,6 +493,7 @@
 													<MenuFlyoutItem x:Uid="ContextCutItem" Click="ContextAction_Click" Tag="Cut" />
 												<MenuFlyoutItem x:Uid="ContextCopyItem" Click="ContextAction_Click" Tag="Copy" />
 												<MenuFlyoutItem x:Uid="ContextDuplicateItem" Click="ContextAction_Click" Tag="Duplicate" />
+												<MenuFlyoutItem x:Uid="ContextCreateSymbolicLinkItem" Click="ContextAction_Click" Tag="CreateSymbolicLink" />
 												<MenuFlyoutItem x:Uid="ContextCopyPathItem" Click="ContextAction_Click" Tag="CopyPath" />
 													<MenuFlyoutItem x:Uid="ContextRenameItem" Click="ContextAction_Click" Tag="Rename" />
 													<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />
@@ -616,6 +619,7 @@
 													<MenuFlyoutItem x:Uid="ContextCutItem" Click="ContextAction_Click" Tag="Cut" />
 													<MenuFlyoutItem x:Uid="ContextCopyItem" Click="ContextAction_Click" Tag="Copy" />
 													<MenuFlyoutItem x:Uid="ContextDuplicateItem" Click="ContextAction_Click" Tag="Duplicate" />
+													<MenuFlyoutItem x:Uid="ContextCreateSymbolicLinkItem" Click="ContextAction_Click" Tag="CreateSymbolicLink" />
 													<MenuFlyoutItem x:Uid="ContextCopyPathItem" Click="ContextAction_Click" Tag="CopyPath" />
 													<MenuFlyoutItem x:Uid="ContextRenameItem" Click="ContextAction_Click" Tag="Rename" />
 													<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />
@@ -693,6 +697,7 @@
 														<MenuFlyoutItem x:Uid="ContextCutItem" Click="ContextAction_Click" Tag="Cut" />
 														<MenuFlyoutItem x:Uid="ContextCopyItem" Click="ContextAction_Click" Tag="Copy" />
 														<MenuFlyoutItem x:Uid="ContextDuplicateItem" Click="ContextAction_Click" Tag="Duplicate" />
+														<MenuFlyoutItem x:Uid="ContextCreateSymbolicLinkItem" Click="ContextAction_Click" Tag="CreateSymbolicLink" />
 														<MenuFlyoutItem x:Uid="ContextCopyPathItem" Click="ContextAction_Click" Tag="CopyPath" />
 														<MenuFlyoutItem x:Uid="ContextRenameItem" Click="ContextAction_Click" Tag="Rename" />
 														<MenuFlyoutItem x:Uid="ContextShareItem" Click="ContextAction_Click" Tag="Share" />

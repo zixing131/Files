@@ -5,7 +5,8 @@ internal sealed record FileOperationHistoryEntry(
 	string? CreatedPath = null,
 	bool CreatedDirectory = false,
 	FileTransferHistoryEntry? Transfer = null,
-	FileTrashHistoryEntry? Trash = null);
+	FileTrashHistoryEntry? Trash = null,
+	CreatedSymbolicLink[]? SymbolicLinks = null);
 
 internal sealed class FileTrashHistoryEntry(IReadOnlyList<TrashedItemResult> items)
 {
