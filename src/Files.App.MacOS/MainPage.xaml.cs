@@ -63,6 +63,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private long previewSelectionCallbackToken;
 	private bool accessibilityAnnouncementsRegistered;
 	private string? lastAccessibilityAnnouncement;
+	private long lastContentWheelTimestamp;
+	private double contentWheelAcceleration = 1;
 
 	public MainPage()
 		: this(restoresWorkspace: true)
@@ -5049,6 +5051,37 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		int offset = (delta > 0) == !currentSettings.ReverseTabScrollDirection ? 1 : -1;
 		SelectRelativeTab(offset, wrap: false);
 		e.Handled = true;
+	}
+
+	private void Items_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+	{
+		if (sender is not FrameworkElement control || FindVisualDescendant<ScrollViewer>(control) is not ScrollViewer scrollViewer)
+		{
+			return;
+		}
+
+		int delta = e.GetCurrentPoint(control).Properties.MouseWheelDelta;
+		if (delta is 0 || scrollViewer.ScrollableHeight <= 0)
+		{
+			return;
+		}
+
+		double distance = GetAcceleratedWheelDistance(delta);
+		double targetOffset = Math.Clamp(scrollViewer.VerticalOffset + distance, 0, scrollViewer.ScrollableHeight);
+		scrollViewer.ChangeView(null, targetOffset, null, disableAnimation: false);
+		e.Handled = true;
+	}
+
+	private double GetAcceleratedWheelDistance(int delta)
+	{
+		long timestamp = Environment.TickCount64;
+		long elapsed = timestamp - lastContentWheelTimestamp;
+		contentWheelAcceleration = elapsed is > 0 and < 90
+			? Math.Min(4, contentWheelAcceleration + (90 - elapsed) / 45d)
+			: 1;
+		lastContentWheelTimestamp = timestamp;
+		double wheelSteps = Math.Clamp(Math.Abs(delta) / 120d, 0.25, 3);
+		return -Math.Sign(delta) * 72 * wheelSteps * contentWheelAcceleration;
 	}
 
 	private bool SelectRelativeTab(int offset, bool wrap)
