@@ -85,6 +85,35 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		ConfigureIconButton(GridViewStatusButton, "GridViewTooltip");
 		ConfigureIconButton(DetailsViewStatusButton, "DetailsViewTooltip");
 		ConfigureIconButton(SearchOptionsButton, "SearchOptionsTooltip");
+		ConfigureAccessibleName(Tabs, "TabStripAutomationName");
+		ConfigureAccessibleName(SidebarList, "LocationsAutomationName");
+		ConfigureAccessibleName(AddressBox, "AddressBarAutomationName");
+		ConfigureAccessibleName(SearchBox, "SearchBoxAutomationName");
+		ConfigureAccessibleName(GridItems, "PrimaryFilesAutomationName");
+		ConfigureAccessibleName(DetailsItems, "PrimaryFilesAutomationName");
+		ConfigureAccessibleName(SecondaryGridItems, "SecondaryFilesAutomationName");
+		ConfigureAccessibleName(SecondaryDetailsItems, "SecondaryFilesAutomationName");
+		ConfigureAccessibleName(FileOperationProgressBar, "FileOperationProgressAutomationName");
+		ConfigureCommandButtonAccessibility(
+			UndoButton,
+			RedoButton,
+			NewCommandButton,
+			CutButton,
+			CopyButton,
+			PasteButton,
+			RenameButton,
+			ShareButton,
+			DeleteButton,
+			RevealButton,
+			PropertiesButton,
+			SelectionButton,
+			ArchiveButton,
+			FavoriteButton,
+			TerminalButton,
+			PreviewPaneButton,
+			SplitViewButton,
+			SortCommandButton,
+			ViewCommandButton);
 		ToolTipService.SetToolTip(SearchBox, GetResource("SearchSyntaxHelp"));
 		Loaded += MainPage_Loaded;
 		Unloaded += MainPage_Unloaded;
@@ -95,6 +124,22 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		string label = GetResource(resourceKey);
 		ToolTipService.SetToolTip(button, label);
 		Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, label);
+	}
+
+	private void ConfigureAccessibleName(DependencyObject element, string resourceKey)
+	{
+		Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(element, GetResource(resourceKey));
+	}
+
+	private static void ConfigureCommandButtonAccessibility(params Button[] buttons)
+	{
+		foreach (Button button in buttons)
+		{
+			if (button.Content is CommandLabel { Content.Length: > 0 } label)
+			{
+				Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, label.Content);
+			}
+		}
 	}
 
 	private DirectoryBrowserViewModel? Browser => ViewModel.ActiveBrowser;
@@ -264,6 +309,27 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		];
 		bool navigationIcons = navigationIconButtons.All(static button => button.Content is PathIcon { Data: not null }) &&
 			navigationIconButtons.All(static button => !string.IsNullOrWhiteSpace(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(button)));
+		DependencyObject[] accessibilityRegions =
+		[
+			Tabs,
+			SidebarList,
+			AddressBox,
+			SearchBox,
+			GridItems,
+			DetailsItems,
+			SecondaryGridItems,
+			SecondaryDetailsItems,
+			FileOperationProgressBar,
+		];
+		bool accessibilityLabels = accessibilityRegions.All(static element =>
+			!string.IsNullOrWhiteSpace(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(element))) &&
+			iconCommandButtons.All(static button =>
+				!string.IsNullOrWhiteSpace(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(button)));
+		var realizedItemNames = browser.Items.Take(8).Select(static item => item.Name).ToHashSet(StringComparer.Ordinal);
+		bool accessibleFileItems = realizedItemNames.Count is 0 ||
+			CountNamedAutomationElements(PrimaryPaneBorder, realizedItemNames) > 0;
+		bool keyboardFocusNavigation = KeyboardAccelerators.Count(accelerator =>
+			accelerator.Key is Windows.System.VirtualKey.F6) == 2 && CycleFocus(reverse: false);
 		Button[] sidebarFooterButtons = [OpenFolderButton, ConnectServerButton, ClearRecentButton, SettingsButton];
 		bool sidebarFooterIcons = sidebarFooterButtons.All(static button =>
 			button.Content is CommandLabel { IconData: not null, Content.Length: > 0 });
@@ -426,7 +492,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
+			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} accessibility_labels={accessibilityLabels} accessible_items={accessibleFileItems} focus_cycle={keyboardFocusNavigation} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -807,6 +873,17 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
 		{
 			count += CountRenderedPathIcons(VisualTreeHelper.GetChild(root, index));
+		}
+		return count;
+	}
+
+	private static int CountNamedAutomationElements(DependencyObject root, IReadOnlySet<string> names)
+	{
+		string name = Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(root);
+		int count = names.Contains(name) ? 1 : 0;
+		for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+		{
+			count += CountNamedAutomationElements(VisualTreeHelper.GetChild(root, index), names);
 		}
 		return count;
 	}
@@ -1599,6 +1676,81 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private void PreviousTabAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
 	{
 		args.Handled = SelectRelativeTab(-1, wrap: true);
+	}
+
+	private void CycleFocusAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		args.Handled = CycleFocus(sender.Modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Shift));
+	}
+
+	private bool CycleFocus(bool reverse)
+	{
+		if (Browser is not DirectoryBrowserViewModel browser || XamlRoot is null)
+		{
+			return false;
+		}
+
+		bool isSecondary = ReferenceEquals(browser, ViewModel.ActiveTab?.SecondaryBrowser);
+		Control itemView = (isSecondary, browser.IsGridView) switch
+		{
+			(true, true) => SecondaryGridItems,
+			(true, false) => SecondaryDetailsItems,
+			(false, true) => GridItems,
+			_ => DetailsItems,
+		};
+		var targets = new List<Control> { Tabs };
+		if (isSidebarOpen)
+		{
+			targets.Add(SidebarList);
+		}
+		if (BreadcrumbPanel.Children.OfType<Button>().FirstOrDefault() is Button breadcrumb)
+		{
+			targets.Add(breadcrumb);
+		}
+		targets.Add(SearchBox);
+		targets.Add(NewCommandButton);
+		targets.Add(itemView);
+		if (isPreviewPaneOpen)
+		{
+			targets.Add(PreviewPaneQuickLookButton);
+		}
+		targets.Add(GridViewStatusButton);
+		targets.RemoveAll(static control => !control.IsEnabled || !IsEffectivelyVisible(control));
+		if (targets.Count is 0)
+		{
+			return false;
+		}
+
+		DependencyObject? focused = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+		int currentIndex = targets.FindIndex(target => IsDescendantOf(focused, target));
+		int targetIndex = reverse
+			? (currentIndex <= 0 ? targets.Count - 1 : currentIndex - 1)
+			: (currentIndex + 1) % targets.Count;
+		return targets[targetIndex].Focus(FocusState.Keyboard);
+	}
+
+	private static bool IsEffectivelyVisible(DependencyObject element)
+	{
+		for (DependencyObject? current = element; current is not null; current = VisualTreeHelper.GetParent(current))
+		{
+			if (current is FrameworkElement { Visibility: not Visibility.Visible })
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static bool IsDescendantOf(DependencyObject? element, DependencyObject ancestor)
+	{
+		for (DependencyObject? current = element; current is not null; current = VisualTreeHelper.GetParent(current))
+		{
+			if (ReferenceEquals(current, ancestor))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void SelectNumberedTabAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)

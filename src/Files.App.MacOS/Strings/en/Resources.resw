@@ -504,4 +504,11 @@
   <data name="UsersFolderDisplayName" xml:space="preserve"><value>Users</value></data>
   <data name="LibraryFolderDisplayName" xml:space="preserve"><value>Library</value></data>
   <data name="PublicFolderDisplayName" xml:space="preserve"><value>Public</value></data>
+  <data name="TabStripAutomationName" xml:space="preserve"><value>Tabs</value></data>
+  <data name="LocationsAutomationName" xml:space="preserve"><value>Locations</value></data>
+  <data name="AddressBarAutomationName" xml:space="preserve"><value>Address bar</value></data>
+  <data name="SearchBoxAutomationName" xml:space="preserve"><value>Search files</value></data>
+  <data name="PrimaryFilesAutomationName" xml:space="preserve"><value>Files</value></data>
+  <data name="SecondaryFilesAutomationName" xml:space="preserve"><value>Secondary pane files</value></data>
+  <data name="FileOperationProgressAutomationName" xml:space="preserve"><value>File operation progress</value></data>
 </root>

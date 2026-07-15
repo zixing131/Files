@@ -39,6 +39,8 @@
 		<KeyboardAccelerator Key="Number7" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Number8" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Number9" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="F6" Invoked="CycleFocusAccelerator_Invoked" />
+		<KeyboardAccelerator Key="F6" Modifiers="Shift" Invoked="CycleFocusAccelerator_Invoked" />
 		<!--  Uno maps the macOS Command key to the WinUI Windows modifier.  -->
 		<KeyboardAccelerator Key="C" Modifiers="Windows" Invoked="CopyAccelerator_Invoked" />
 		<KeyboardAccelerator Key="X" Modifiers="Windows" Invoked="CutAccelerator_Invoked" />
@@ -83,6 +85,7 @@
 			<TabView.TabItemTemplate>
 				<DataTemplate x:DataType="viewmodels:BrowserTabViewModel">
 					<TabViewItem
+						AutomationProperties.Name="{Binding Header}"
 						MinWidth="132"
 						MaxWidth="260"
 						CornerRadius="7,7,0,0"
@@ -244,7 +247,7 @@
 						SelectionMode="Single">
 					<ListView.ItemTemplate>
 						<DataTemplate>
-							<Grid>
+							<Grid AutomationProperties.Name="{Binding Name}">
 								<Grid
 									MinHeight="32"
 									Padding="8,6,8,2"
@@ -497,7 +500,7 @@
 							</ItemsView.Layout>
 							<ItemsView.ItemTemplate>
 								<DataTemplate>
-									<ItemContainer Width="116" Height="108">
+									<ItemContainer Width="116" Height="108" AutomationProperties.Name="{Binding Name}">
 									<Grid CanDrag="True" DragStarting="GridItem_DragStarting" RowDefinitions="72,*" RightTapped="Item_RightTapped" ToolTipService.ToolTip="{Binding Path}">
 										<Grid.ContextFlyout>
 											<MenuFlyout Opening="ItemContextFlyout_Opening">
@@ -584,7 +587,7 @@
 								</ListView.ItemsPanel>
 								<ListView.ItemTemplate>
 									<DataTemplate>
-										<Grid MinHeight="36" Padding="8,4" ColumnDefinitions="28,*,180,100" RightTapped="Item_RightTapped" ToolTipService.ToolTip="{Binding Path}">
+										<Grid MinHeight="36" Padding="8,4" AutomationProperties.Name="{Binding Name}" ColumnDefinitions="28,*,180,100" RightTapped="Item_RightTapped" ToolTipService.ToolTip="{Binding Path}">
 											<Grid.ContextFlyout>
 											<MenuFlyout Opening="ItemContextFlyout_Opening">
 													<MenuFlyoutItem x:Uid="ContextOpenItem" Click="ContextAction_Click" Tag="Open" />
@@ -709,7 +712,7 @@
 								</ItemsView.Layout>
 								<ItemsView.ItemTemplate>
 									<DataTemplate>
-										<ItemContainer Width="116" Height="108">
+										<ItemContainer Width="116" Height="108" AutomationProperties.Name="{Binding Name}">
 										<Grid CanDrag="True" DragStarting="GridItem_DragStarting" RowDefinitions="72,*" RightTapped="Item_RightTapped" ToolTipService.ToolTip="{Binding Path}">
 											<Grid.ContextFlyout>
 												<MenuFlyout Opening="ItemContextFlyout_Opening">
@@ -788,7 +791,7 @@
 									</ListView.ItemsPanel>
 									<ListView.ItemTemplate>
 										<DataTemplate>
-											<Grid MinHeight="36" Padding="8,4" ColumnDefinitions="28,*,140,90" RightTapped="Item_RightTapped" ToolTipService.ToolTip="{Binding Path}">
+											<Grid MinHeight="36" Padding="8,4" AutomationProperties.Name="{Binding Name}" ColumnDefinitions="28,*,140,90" RightTapped="Item_RightTapped" ToolTipService.ToolTip="{Binding Path}">
 												<Grid.ContextFlyout>
 												<MenuFlyout Opening="ItemContextFlyout_Opening">
 													<MenuFlyoutItem x:Uid="ContextOpenItem" Click="ContextAction_Click" Tag="Open" />
