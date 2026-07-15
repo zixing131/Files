@@ -36,8 +36,21 @@ public sealed class MainPageViewModel : ObservableObject
 		get => activeTab;
 		set
 		{
+			if (ReferenceEquals(activeTab, value))
+			{
+				return;
+			}
+
+			if (activeTab is not null)
+			{
+				activeTab.IsActive = false;
+			}
 			if (SetProperty(ref activeTab, value))
 			{
+				if (activeTab is not null)
+				{
+					activeTab.IsActive = true;
+				}
 				OnPropertyChanged(nameof(ActiveBrowser));
 				OnWorkspaceChanged();
 			}
@@ -89,7 +102,7 @@ public sealed class MainPageViewModel : ObservableObject
 	public async Task NewTabAsync(string? path = null)
 	{
 		var browser = CreateBrowser();
-		var tab = new BrowserTabViewModel(browser, GetResource("HomeTabHeader"));
+		var tab = new BrowserTabViewModel(browser, GetResource("HomeTabHeader"), GetPathDisplayName);
 		tab.StateChanged += Tab_StateChanged;
 		Tabs.Add(tab);
 		ActiveTab = tab;
@@ -368,7 +381,7 @@ public sealed class MainPageViewModel : ObservableObject
 	{
 		DirectoryBrowserViewModel primary = CreateBrowser();
 		ApplyPaneState(primary, state.Primary);
-		var tab = new BrowserTabViewModel(primary, GetResource("HomeTabHeader"));
+		var tab = new BrowserTabViewModel(primary, GetResource("HomeTabHeader"), GetPathDisplayName);
 		tab.StateChanged += Tab_StateChanged;
 		if (insertIndex is int index)
 		{
@@ -443,6 +456,50 @@ public sealed class MainPageViewModel : ObservableObject
 		}
 
 		return fallback ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+	}
+
+	private string GetPathDisplayName(string path)
+	{
+		try
+		{
+			string fullPath = Path.GetFullPath(path);
+			string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+			(string Path, string Resource)[] knownFolders =
+			[
+				(home, "HomeTabHeader"),
+				(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "SidebarDesktopButton/Content"),
+				(Path.Combine(home, "Downloads"), "SidebarDownloadsButton/Content"),
+				(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SidebarDocumentsButton/Content"),
+				(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "SidebarPicturesButton/Content"),
+				(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "SidebarMusicButton/Content"),
+				(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "SidebarMoviesButton/Content"),
+				("/Applications", "ApplicationsFolderDisplayName"),
+				(Path.Combine(home, "Applications"), "ApplicationsFolderDisplayName"),
+				("/Users", "UsersFolderDisplayName"),
+				("/Library", "LibraryFolderDisplayName"),
+				(Path.Combine(home, "Library"), "LibraryFolderDisplayName"),
+				(Path.Combine(home, "Public"), "PublicFolderDisplayName"),
+			];
+			foreach ((string knownPath, string resource) in knownFolders)
+			{
+				if (!string.IsNullOrWhiteSpace(knownPath) && string.Equals(fullPath, knownPath, StringComparison.Ordinal))
+				{
+					return GetResource(resource);
+				}
+			}
+
+			if (fullPath is "/")
+			{
+				return GetResource("SystemVolumeName");
+			}
+
+			string name = Path.GetFileName(Path.TrimEndingDirectorySeparator(fullPath));
+			return string.IsNullOrWhiteSpace(name) ? fullPath : name;
+		}
+		catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+		{
+			return path;
+		}
 	}
 
 	private void Tab_StateChanged(object? sender, EventArgs e)

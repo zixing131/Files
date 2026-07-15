@@ -4,14 +4,21 @@ namespace Files.App.MacOS.ViewModels;
 
 public sealed class BrowserTabViewModel : ObservableObject, IDisposable
 {
+	private readonly Func<string, string> pathDisplayNameResolver;
 	private string header;
 	private DirectoryBrowserViewModel activeBrowser;
 	private DirectoryBrowserViewModel? secondaryBrowser;
 	private double splitRatio = 0.5;
+	private bool isActive;
+	private bool isPointerOver;
 
-	public BrowserTabViewModel(DirectoryBrowserViewModel browser, string defaultHeader)
+	public BrowserTabViewModel(
+		DirectoryBrowserViewModel browser,
+		string defaultHeader,
+		Func<string, string> pathDisplayNameResolver)
 	{
 		Browser = browser;
+		this.pathDisplayNameResolver = pathDisplayNameResolver;
 		activeBrowser = browser;
 		header = defaultHeader;
 		Browser.PropertyChanged += Browser_PropertyChanged;
@@ -60,6 +67,32 @@ public sealed class BrowserTabViewModel : ObservableObject, IDisposable
 	}
 
 	public bool IsSplitView => SecondaryBrowser is not null;
+
+	public bool IsActive
+	{
+		get => isActive;
+		set
+		{
+			if (SetProperty(ref isActive, value))
+			{
+				OnPropertyChanged(nameof(ShowCloseButton));
+			}
+		}
+	}
+
+	public bool IsPointerOver
+	{
+		get => isPointerOver;
+		set
+		{
+			if (SetProperty(ref isPointerOver, value))
+			{
+				OnPropertyChanged(nameof(ShowCloseButton));
+			}
+		}
+	}
+
+	public bool ShowCloseButton => IsActive || IsPointerOver;
 
 	public double SplitRatio
 	{
@@ -122,8 +155,7 @@ public sealed class BrowserTabViewModel : ObservableObject, IDisposable
 	{
 		if (ReferenceEquals(sender, Browser) && e.PropertyName is nameof(DirectoryBrowserViewModel.CurrentPath))
 		{
-			string name = Path.GetFileName(Browser.CurrentPath.TrimEnd(Path.DirectorySeparatorChar));
-			Header = string.IsNullOrEmpty(name) ? Browser.CurrentPath : name;
+			Header = pathDisplayNameResolver(Browser.CurrentPath);
 		}
 
 		if (e.PropertyName is nameof(DirectoryBrowserViewModel.CurrentPath) or

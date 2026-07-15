@@ -30,6 +30,15 @@
 		<KeyboardAccelerator Key="K" Modifiers="Control,Shift" Invoked="DuplicateTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Tab" Modifiers="Control" Invoked="NextTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Tab" Modifiers="Control,Shift" Invoked="PreviousTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number1" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number2" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number3" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number4" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number5" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number6" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number7" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number8" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Number9" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
 		<!--  Uno maps the macOS Command key to the WinUI Windows modifier.  -->
 		<KeyboardAccelerator Key="C" Modifiers="Windows" Invoked="CopyAccelerator_Invoked" />
 		<KeyboardAccelerator Key="X" Modifiers="Windows" Invoked="CutAccelerator_Invoked" />
@@ -69,10 +78,18 @@
 			TabCloseRequested="Tabs_TabCloseRequested"
 			TabDragCompleted="Tabs_TabDragCompleted"
 			TabDroppedOutside="Tabs_TabDroppedOutside"
-			TabItemsSource="{Binding Tabs}">
+			TabItemsSource="{Binding Tabs}"
+			TabWidthMode="Equal">
 			<TabView.TabItemTemplate>
 				<DataTemplate x:DataType="viewmodels:BrowserTabViewModel">
-					<TabViewItem IsClosable="False">
+					<TabViewItem
+						MinWidth="132"
+						MaxWidth="260"
+						CornerRadius="7,7,0,0"
+						IsClosable="False"
+						PointerEntered="TabItem_PointerEntered"
+						PointerExited="TabItem_PointerExited"
+						Tag="{Binding}">
 						<TabViewItem.ContextFlyout>
 							<MenuFlyout Opening="TabContextFlyout_Opening">
 								<MenuFlyoutItem x:Uid="NewTabMenuItem" Click="NewTabMenuItem_Click" KeyboardAcceleratorTextOverride="⌘T" />
@@ -91,9 +108,11 @@
 							<StackPanel Orientation="Horizontal" Spacing="7">
 								<PathIcon Width="16" Height="16" Data="M2,4 H8 L10,6 H18 V17 H2 Z M4,8 V15 H16 V8 Z" />
 								<TextBlock MaxWidth="180" Text="{x:Bind Header, Mode=OneWay}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-								<Button Width="22" Height="22" Padding="0" Click="TabHeaderCloseButton_Click" Loaded="TabHeaderCloseButton_Loaded" Style="{StaticResource NavigationButtonStyle}" Tag="{Binding}">
-									<PathIcon Width="10" Height="10" Data="M3,2 L10,9 L17,2 L18,3 L11,10 L18,17 L17,18 L10,11 L3,18 L2,17 L9,10 L2,3 Z" />
-								</Button>
+								<Grid Width="22" Height="22">
+									<Button Width="22" Height="22" Padding="0" Click="TabHeaderCloseButton_Click" Loaded="TabHeaderCloseButton_Loaded" Style="{StaticResource NavigationButtonStyle}" Tag="{Binding}" Visibility="{Binding ShowCloseButton, Converter={StaticResource BooleanToVisibilityConverter}}">
+										<PathIcon Width="10" Height="10" Data="M3,2 L10,9 L17,2 L18,3 L11,10 L18,17 L17,18 L10,11 L3,18 L2,17 L9,10 L2,3 Z" />
+									</Button>
+								</Grid>
 							</StackPanel>
 						</TabViewItem.Header>
 					</TabViewItem>

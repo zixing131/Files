@@ -19,6 +19,11 @@
 					<SolidColorBrush x:Key="FilesSubtleBrush" Color="#08000000" />
 					<SolidColorBrush x:Key="FilesAccentBrush" Color="#0067C0" />
 					<SolidColorBrush x:Key="FilesAccentSubtleBrush" Color="#180067C0" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackground" Color="Transparent" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="#FFFFFFFF" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver" Color="#0A000000" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed" Color="#12000000" />
+					<SolidColorBrush x:Key="TabViewItemSeparator" Color="#16000000" />
 				</ResourceDictionary>
 				<ResourceDictionary x:Key="Dark">
 					<SolidColorBrush x:Key="FilesBackgroundBrush" Color="#202020" />
@@ -29,6 +34,11 @@
 					<SolidColorBrush x:Key="FilesSubtleBrush" Color="#0CFFFFFF" />
 					<SolidColorBrush x:Key="FilesAccentBrush" Color="#60CDFF" />
 					<SolidColorBrush x:Key="FilesAccentSubtleBrush" Color="#2460CDFF" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackground" Color="Transparent" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="#FF323232" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver" Color="#12FFFFFF" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed" Color="#1CFFFFFF" />
+					<SolidColorBrush x:Key="TabViewItemSeparator" Color="#22FFFFFF" />
 				</ResourceDictionary>
 				<ResourceDictionary x:Key="Default">
 					<SolidColorBrush x:Key="FilesBackgroundBrush" Color="#202020" />
@@ -39,6 +49,11 @@
 					<SolidColorBrush x:Key="FilesSubtleBrush" Color="#0CFFFFFF" />
 					<SolidColorBrush x:Key="FilesAccentBrush" Color="#60CDFF" />
 					<SolidColorBrush x:Key="FilesAccentSubtleBrush" Color="#2460CDFF" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackground" Color="Transparent" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="#FF323232" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver" Color="#12FFFFFF" />
+					<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed" Color="#1CFFFFFF" />
+					<SolidColorBrush x:Key="TabViewItemSeparator" Color="#22FFFFFF" />
 				</ResourceDictionary>
 			</ResourceDictionary.ThemeDictionaries>
 

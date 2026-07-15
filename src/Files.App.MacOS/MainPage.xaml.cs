@@ -390,9 +390,20 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		int switchSourceTabCount = ViewModel.Tabs.Count;
 		await ViewModel.NewTabAsync(browser.CurrentPath);
 		BrowserTabViewModel switchTab = ViewModel.ActiveTab!;
+		BrowserTabViewModel firstTab = ViewModel.Tabs[0];
+		await Task.Delay(100);
+		bool tabChrome = switchTab.IsActive && !firstTab.IsActive && CountVisibleTabCloseButtons(Tabs) == 1;
+		firstTab.IsPointerOver = true;
+		await Task.Delay(50);
+		tabChrome &= firstTab.ShowCloseButton && CountVisibleTabCloseButtons(Tabs) == 2;
+		firstTab.IsPointerOver = false;
 		bool tabSwitching = Tabs.CanDragTabs && Tabs.CanReorderTabs &&
 			KeyboardAccelerators.Count(accelerator => accelerator.Key is Windows.System.VirtualKey.Tab &&
 				accelerator.Modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) == 2 &&
+			KeyboardAccelerators.Count(accelerator => accelerator.Key is >= Windows.System.VirtualKey.Number1 and <= Windows.System.VirtualKey.Number9 &&
+				accelerator.Modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) == 9 &&
+			SelectNumberedTab(1) && ReferenceEquals(ViewModel.ActiveTab, firstTab) &&
+			SelectNumberedTab(9) && ReferenceEquals(ViewModel.ActiveTab, switchTab) &&
 			SelectRelativeTab(1, wrap: true) && ReferenceEquals(ViewModel.ActiveTab, ViewModel.Tabs[0]) &&
 			SelectRelativeTab(-1, wrap: true) && ReferenceEquals(ViewModel.ActiveTab, switchTab) &&
 			!SelectRelativeTab(1, wrap: false) && ReferenceEquals(ViewModel.ActiveTab, switchTab);
@@ -406,7 +417,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			mergeBaseline with { RecentPaths = ["requested-recent"] });
 		bool multiWindowSettingsMerge = mergedConcurrentSettings.FavoritePaths is ["newer-favorite"] &&
 			mergedConcurrentSettings.RecentPaths is ["requested-recent"] && mergedConcurrentSettings.ReverseTabScrollDirection;
-		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip, bool securityPropertiesRoundtrip, bool openWithRoundtrip, bool recentLocationsRoundtrip, bool duplicateRoundtrip, bool newTabRoundtrip, bool tabHistoryRoundtrip, bool tabManagementRoundtrip, bool symbolicLinkRoundtrip) = await RunFileMutationDiagnosticsAsync();
+		(bool permanentDeleteRoundtrip, bool metadataEditRoundtrip, bool securityPropertiesRoundtrip, bool openWithRoundtrip, bool recentLocationsRoundtrip, bool duplicateRoundtrip, bool newTabRoundtrip, bool tabLabelsRoundtrip, bool tabHistoryRoundtrip, bool tabManagementRoundtrip, bool symbolicLinkRoundtrip) = await RunFileMutationDiagnosticsAsync();
 
 		using System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
 		Console.WriteLine(
@@ -415,7 +426,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
+			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -429,7 +440,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"inverted_count={selectedItems.Count} elapsed_ms={selectionTimer.Elapsed.TotalMilliseconds:F1}");
 	}
 
-	private async Task<(bool PermanentDelete, bool MetadataEdit, bool SecurityProperties, bool OpenWith, bool RecentLocations, bool Duplicate, bool NewTab, bool TabHistory, bool TabManagement, bool SymbolicLink)> RunFileMutationDiagnosticsAsync()
+	private async Task<(bool PermanentDelete, bool MetadataEdit, bool SecurityProperties, bool OpenWith, bool RecentLocations, bool Duplicate, bool NewTab, bool TabLabels, bool TabHistory, bool TabManagement, bool SymbolicLink)> RunFileMutationDiagnosticsAsync()
 	{
 		string root = Path.Combine(Path.GetTempPath(), $"files-macos-diagnostics-{Guid.NewGuid():N}");
 		try
@@ -607,6 +618,16 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 			var tabViewModel = new MainPageViewModel();
 			await tabViewModel.InitializeAsync();
+			bool tabLabels = tabViewModel.ActiveTab?.Header == GetResource("HomeTabHeader");
+			if (Directory.Exists("/Applications"))
+			{
+				await tabViewModel.NewTabAsync("/Applications");
+				tabLabels &= tabViewModel.ActiveTab?.Header == GetResource("ApplicationsFolderDisplayName");
+				if (tabViewModel.ActiveTab is BrowserTabViewModel applicationsTab)
+				{
+					tabViewModel.CloseTab(applicationsTab);
+				}
+			}
 			int initialTabCount = tabViewModel.Tabs.Count;
 			await tabViewModel.NewTabAsync(root);
 			bool newTab = tabViewModel.Tabs.Count == initialTabCount + 1 &&
@@ -722,12 +743,12 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			{
 				symbolicLink &= File.Exists(links[1].Path) || Directory.Exists(links[1].Path);
 			}
-			return (permanentDelete, metadataEdit, securityProperties, openWith, recentLocations, duplicate, newTab, tabHistory, tabManagement, symbolicLink);
+			return (permanentDelete, metadataEdit, securityProperties, openWith, recentLocations, duplicate, newTab, tabLabels, tabHistory, tabManagement, symbolicLink);
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 		{
 			Console.Error.WriteLine($"FILES_MACOS_MUTATION_ERROR type={ex.GetType().Name} message={ex.Message}");
-			return (false, false, false, false, false, false, false, false, false, false);
+			return (false, false, false, false, false, false, false, false, false, false, false);
 		}
 		finally
 		{
@@ -786,6 +807,22 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
 		{
 			count += CountRenderedPathIcons(VisualTreeHelper.GetChild(root, index));
+		}
+		return count;
+	}
+
+	private static int CountVisibleTabCloseButtons(DependencyObject root)
+	{
+		int count = root is Button
+		{
+			Tag: BrowserTabViewModel,
+			Visibility: Visibility.Visible,
+			ActualWidth: > 0,
+			ActualHeight: > 0,
+		} ? 1 : 0;
+		for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+		{
+			count += CountVisibleTabCloseButtons(VisualTreeHelper.GetChild(root, index));
 		}
 		return count;
 	}
@@ -1562,6 +1599,29 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private void PreviousTabAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
 	{
 		args.Handled = SelectRelativeTab(-1, wrap: true);
+	}
+
+	private void SelectNumberedTabAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		int number = (int)sender.Key - (int)Windows.System.VirtualKey.Number0;
+		args.Handled = SelectNumberedTab(number);
+	}
+
+	private bool SelectNumberedTab(int number)
+	{
+		if (number is < 1 or > 9 || ViewModel.Tabs.Count is 0)
+		{
+			return false;
+		}
+
+		int targetIndex = number is 9 ? ViewModel.Tabs.Count - 1 : number - 1;
+		if (targetIndex < ViewModel.Tabs.Count)
+		{
+			ViewModel.ActiveTab = ViewModel.Tabs[targetIndex];
+			return true;
+		}
+
+		return false;
 	}
 
 	private bool CanDuplicateSelection()
@@ -3985,6 +4045,22 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		if (sender is Button button)
 		{
 			ConfigureIconButton(button, "CloseTabTooltip");
+		}
+	}
+
+	private void TabItem_PointerEntered(object sender, PointerRoutedEventArgs e)
+	{
+		if (sender is TabViewItem { Tag: BrowserTabViewModel tab })
+		{
+			tab.IsPointerOver = true;
+		}
+	}
+
+	private void TabItem_PointerExited(object sender, PointerRoutedEventArgs e)
+	{
+		if (sender is TabViewItem { Tag: BrowserTabViewModel tab })
+		{
+			tab.IsPointerOver = false;
 		}
 	}
 
