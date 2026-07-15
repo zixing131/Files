@@ -637,7 +637,12 @@ public sealed class MainPageViewModel : ObservableObject
 			new SidebarLocationOption("Applications", GetResource("ApplicationsFolderDisplayName"), "/Applications", "A"),
 			new SidebarLocationOption("Shared", GetResource("SidebarSharedLocationName"), "/Users/Shared", "S"),
 			new SidebarLocationOption("ICloud", GetResource("SidebarICloudLocationName"), Path.Combine(home, "Library/Mobile Documents/com~apple~CloudDocs"), "☁"),
-			new SidebarLocationOption("Trash", GetResource("SidebarTrashLocationName"), Path.Combine(home, ".Trash"), "T"),
+			new SidebarLocationOption(
+				"Trash",
+				GetResource("SidebarTrashLocationName"),
+				Path.Combine(home, ".Trash"),
+				"T",
+				new Uri(Path.Combine(home, ".Trash")).AbsoluteUri),
 			new SidebarLocationOption("AirDrop", GetResource("SidebarAirDropLocationName"), string.Empty, "R", "airdrop://"),
 			new SidebarLocationOption("Desktop", GetResource("SidebarDesktopButton/Content"), Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "▣"),
 			new SidebarLocationOption("Downloads", GetResource("SidebarDownloadsButton/Content"), Path.Combine(home, "Downloads"), "↓"),
