@@ -39,6 +39,7 @@
 typedef void (*FilesMenuCommandCallback)(void *context, int command);
 typedef int (*FilesMenuValidationCallback)(void *context, int command);
 typedef void (*FilesAuxiliaryMouseCallback)(void *context, int buttonNumber);
+typedef int (*FilesScrollWheelCallback)(void *context, double deltaX, double deltaY, int hasPreciseDeltas);
 
 @interface FilesMenuTarget : NSObject <NSMenuItemValidation>
 @property(nonatomic, assign) FilesMenuCommandCallback executeCallback;
@@ -69,8 +70,10 @@ static NSSharingServicePicker *sharingServicePicker;
 static FilesMenuTarget *mainMenuTarget;
 static id auxiliaryMouseMonitor;
 static FilesAuxiliaryMouseCallback auxiliaryMouseCallback;
+static FilesScrollWheelCallback scrollWheelCallback;
 static void *auxiliaryMouseCallbackContext;
 static atomic_bool mainMenuInstalled;
+static atomic_bool gridScrollCaptureEnabled;
 static atomic_int mainMenuRootCount;
 static atomic_int mainMenuCommandCount;
 static NSPasteboardType const FilesCutPasteboardType = @"io.filescommunity.files.cut-items";
@@ -83,6 +86,7 @@ static NSString *const FilesMetadataItemUserTagsKey = @"kMDItemUserTags";
 
 __attribute__((visibility("default"))) void files_macos_install_auxiliary_mouse_handler(
 	FilesAuxiliaryMouseCallback callback,
+	FilesScrollWheelCallback scrollCallback,
 	void *callbackContext)
 {
 	dispatch_async(dispatch_get_main_queue(), ^{
@@ -92,17 +96,31 @@ __attribute__((visibility("default"))) void files_macos_install_auxiliary_mouse_
 			auxiliaryMouseMonitor = nil;
 		}
 		auxiliaryMouseCallback = callback;
+		scrollWheelCallback = scrollCallback;
 		auxiliaryMouseCallbackContext = callbackContext;
-		if (callback == NULL)
+		if (callback == NULL && scrollCallback == NULL)
 		{
 			return;
 		}
 
-		auxiliaryMouseMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskOtherMouseDown handler:^NSEvent *(NSEvent *event) {
-			NSInteger buttonNumber = event.buttonNumber;
-			if (buttonNumber >= 2 && buttonNumber <= 4 && auxiliaryMouseCallback != NULL)
+		NSEventMask eventMask = NSEventMaskOtherMouseDown | NSEventMaskScrollWheel;
+		auxiliaryMouseMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:eventMask handler:^NSEvent *(NSEvent *event) {
+			if (event.type == NSEventTypeOtherMouseDown)
 			{
-				auxiliaryMouseCallback(auxiliaryMouseCallbackContext, (int)buttonNumber);
+				NSInteger buttonNumber = event.buttonNumber;
+				if (buttonNumber >= 2 && buttonNumber <= 4 && auxiliaryMouseCallback != NULL)
+				{
+					auxiliaryMouseCallback(auxiliaryMouseCallbackContext, (int)buttonNumber);
+					return nil;
+				}
+			}
+			else if (event.type == NSEventTypeScrollWheel && atomic_load(&gridScrollCaptureEnabled) && scrollWheelCallback != NULL &&
+				scrollWheelCallback(
+					auxiliaryMouseCallbackContext,
+					event.scrollingDeltaX,
+					event.scrollingDeltaY,
+					event.hasPreciseScrollingDeltas ? 1 : 0) != 0)
+			{
 				return nil;
 			}
 			return event;
@@ -119,8 +137,14 @@ __attribute__((visibility("default"))) void files_macos_uninstall_auxiliary_mous
 			auxiliaryMouseMonitor = nil;
 		}
 		auxiliaryMouseCallback = NULL;
+		scrollWheelCallback = NULL;
 		auxiliaryMouseCallbackContext = NULL;
 	});
+}
+
+__attribute__((visibility("default"))) void files_macos_set_grid_scroll_capture(int isEnabled)
+{
+	atomic_store(&gridScrollCaptureEnabled, isEnabled != 0);
 }
 
 typedef struct

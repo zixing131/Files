@@ -50,6 +50,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private bool isUpdatingSelection;
 	private bool isUpdatingSidebarSelection;
 	private bool isEditingAddress;
+	private bool isPointerOverPrimaryGrid;
+	private bool isPointerOverSecondaryGrid;
 	private bool isSidebarOpen = true;
 	private double sidebarWidth = 228;
 	private bool isPreviewPaneOpen;
@@ -88,6 +90,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		RegisterContentWheelHandler(DetailsItems);
 		RegisterContentWheelHandler(SecondaryGridItems);
 		RegisterContentWheelHandler(SecondaryDetailsItems);
+		GridItems.PointerEntered += (_, _) => SetGridPointerState(isPrimary: true, isPointerOver: true);
+		GridItems.PointerExited += (_, _) => SetGridPointerState(isPrimary: true, isPointerOver: false);
+		SecondaryGridItems.PointerEntered += (_, _) => SetGridPointerState(isPrimary: false, isPointerOver: true);
+		SecondaryGridItems.PointerExited += (_, _) => SetGridPointerState(isPrimary: false, isPointerOver: false);
 		PrimaryPaneBorder.AddHandler(UIElement.RightTappedEvent, new RightTappedEventHandler(PrimaryPane_RightTapped), handledEventsToo: true);
 		SecondaryPaneBorder.AddHandler(UIElement.RightTappedEvent, new RightTappedEventHandler(SecondaryPane_RightTapped), handledEventsToo: true);
 		RegisterDividerPointerHandlers(SidebarDivider, SidebarDivider_PointerPressed, SidebarDivider_PointerMoved, SidebarDivider_PointerReleased, SidebarDivider_PointerCaptureLost);
@@ -1619,6 +1625,50 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				await Browser.GoForwardAsync();
 				break;
 		}
+	}
+
+	internal bool HandleNativeScrollWheel(double deltaX, double deltaY, bool hasPreciseDeltas)
+	{
+		BrowserTabViewModel? activeTab = ViewModel.ActiveTab;
+		(DirectoryBrowserViewModel? browser, ItemsView? view) = isPointerOverPrimaryGrid && activeTab?.Browser is { IsGridView: true } primaryBrowser
+			? (primaryBrowser, GridItems)
+			: isPointerOverSecondaryGrid && activeTab?.SecondaryBrowser is { IsGridView: true } secondaryBrowser
+				? (secondaryBrowser, SecondaryGridItems)
+				: (null, null);
+		if (browser is null || view is null)
+		{
+			return false;
+		}
+
+		ScrollView? scrollView = view.ScrollView ?? FindVisualDescendant<ScrollView>(view);
+		double sourceDelta = Math.Abs(deltaY) >= Math.Abs(deltaX) ? deltaY : deltaX;
+		if (scrollView is null || sourceDelta is 0 || scrollView.ExtentHeight <= scrollView.ViewportHeight)
+		{
+			return false;
+		}
+
+		ActivateBrowser(browser, view);
+		double distance = -sourceDelta * (hasPreciseDeltas ? 1 : 40);
+		double maximumOffset = Math.Max(0, scrollView.ExtentHeight - scrollView.ViewportHeight);
+		double targetOffset = Math.Clamp(scrollView.VerticalOffset + distance, 0, maximumOffset);
+		scrollView.ScrollTo(
+			scrollView.HorizontalOffset,
+			targetOffset,
+			new ScrollingScrollOptions(ScrollingAnimationMode.Disabled, ScrollingSnapPointsMode.Ignore));
+		return true;
+	}
+
+	private void SetGridPointerState(bool isPrimary, bool isPointerOver)
+	{
+		if (isPrimary)
+		{
+			isPointerOverPrimaryGrid = isPointerOver;
+		}
+		else
+		{
+			isPointerOverSecondaryGrid = isPointerOver;
+		}
+		MacOSAuxiliaryMouseService.SetGridScrollCapture(isPointerOverPrimaryGrid || isPointerOverSecondaryGrid);
 	}
 
 	private async void UpButton_Click(object sender, RoutedEventArgs e)

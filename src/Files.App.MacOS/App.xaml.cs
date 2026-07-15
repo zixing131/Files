@@ -74,7 +74,10 @@ public partial class App : Application, IMacOSMenuCommandTarget
 				page.DispatcherQueue);
 			isMainMenuInstalled = true;
 		}
-		auxiliaryMouseService ??= new(page.DispatcherQueue, buttonNumber => activePage?.HandleAuxiliaryMouseButton(buttonNumber));
+		auxiliaryMouseService ??= new(
+			page.DispatcherQueue,
+			buttonNumber => activePage?.HandleAuxiliaryMouseButton(buttonNumber),
+			(deltaX, deltaY, hasPreciseDeltas) => activePage?.HandleNativeScrollWheel(deltaX, deltaY, hasPreciseDeltas) is true);
 
 		activePage = page;
 		window.Activate();
