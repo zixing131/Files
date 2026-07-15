@@ -5305,6 +5305,33 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		Browser?.UpdateSelection(selectedItems);
 		UpdatePaneVisuals();
 		UpdateCommandStates();
+		DispatcherQueue.TryEnqueue(() =>
+		{
+			if (ViewModel.ActiveTab is not BrowserTabViewModel tab)
+			{
+				return;
+			}
+			ResetItemsScrollPosition(GetVisibleItemsControl(tab.Browser));
+			if (tab.IsSplitView && tab.SecondaryBrowser is not null)
+			{
+				ResetItemsScrollPosition(GetVisibleItemsControl(tab.SecondaryBrowser));
+			}
+		});
+	}
+
+	private static void ResetItemsScrollPosition(FrameworkElement control)
+	{
+		if (control is ItemsView { ScrollView: ScrollView scrollView })
+		{
+			scrollView.ScrollTo(
+				scrollView.HorizontalOffset,
+				0,
+				new ScrollingScrollOptions(ScrollingAnimationMode.Disabled, ScrollingSnapPointsMode.Ignore));
+		}
+		else if (FindVisualDescendant<ScrollViewer>(control) is ScrollViewer scrollViewer)
+		{
+			scrollViewer.ChangeView(null, 0, null, disableAnimation: true);
+		}
 	}
 
 	private void Tabs_TabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
