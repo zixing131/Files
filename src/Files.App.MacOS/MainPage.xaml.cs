@@ -4864,6 +4864,17 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private void TabItem_PointerPressed(object sender, PointerRoutedEventArgs e)
+	{
+		if (fileTransferCancellation is null &&
+			e.GetCurrentPoint(this).Properties.PointerUpdateKind is Microsoft.UI.Input.PointerUpdateKind.MiddleButtonPressed &&
+			sender is TabViewItem { Tag: BrowserTabViewModel tab })
+		{
+			e.Handled = true;
+			ViewModel.CloseTab(tab);
+		}
+	}
+
 	private void TabItem_PointerExited(object sender, PointerRoutedEventArgs e)
 	{
 		if (sender is TabViewItem { Tag: BrowserTabViewModel tab })

@@ -118,6 +118,7 @@
 						CornerRadius="7,7,0,0"
 						HorizontalContentAlignment="Stretch"
 						IsClosable="False"
+						PointerPressed="TabItem_PointerPressed"
 						PointerEntered="TabItem_PointerEntered"
 						PointerExited="TabItem_PointerExited"
 						Tag="{Binding}">
