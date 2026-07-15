@@ -434,7 +434,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		FileSortField initialSortField = browser.SortField;
 		FileSortDirection initialSortDirection = browser.SortDirection;
 		FileSortField diagnosticSortField = initialSortField is FileSortField.Modified ? FileSortField.Size : FileSortField.Modified;
-		ApplyDetailsSort(browser, diagnosticSortField);
+		ApplyDetailsSort(browser, diagnosticSortField, announce: false);
 		bool diagnosticIsSecondary = ReferenceEquals(browser, ViewModel.ActiveTab?.SecondaryBrowser);
 		PathIcon diagnosticIndicator = (diagnosticIsSecondary, diagnosticSortField) switch
 		{
@@ -445,6 +445,27 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		};
 		bool sortHeaderRoundtrip = browser.SortField == diagnosticSortField &&
 			diagnosticIndicator is { Data: not null, Visibility: Visibility.Visible };
+		Button diagnosticHeaderButton = (diagnosticIsSecondary, diagnosticSortField) switch
+		{
+			(true, FileSortField.Modified) => SecondaryModifiedHeaderButton,
+			(true, _) => SecondarySizeHeaderButton,
+			(false, FileSortField.Modified) => PrimaryModifiedHeaderButton,
+			_ => PrimarySizeHeaderButton,
+		};
+		string diagnosticDirectionLabel = GetResource(browser.SortDirection is FileSortDirection.Ascending
+			? "SortAscendingItem/Text"
+			: "SortDescendingItem/Text");
+		bool sortAccessibility = Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(diagnosticHeaderButton)
+			.Contains(diagnosticDirectionLabel, StringComparison.Ordinal) &&
+			new[]
+			{
+				PrimaryNameHeaderButton,
+				PrimaryModifiedHeaderButton,
+				PrimarySizeHeaderButton,
+				SecondaryNameHeaderButton,
+				SecondaryModifiedHeaderButton,
+				SecondarySizeHeaderButton,
+			}.All(static button => !string.IsNullOrWhiteSpace(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(button)));
 		browser.SetSort(initialSortField, initialSortDirection);
 		UpdateSortHeaderVisuals();
 		bool initialGridView = browser.IsGridView;
@@ -591,7 +612,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} keyboard_resize={keyboardResize} sidebar_active={sidebarActiveSync} sidebar_keyboard={sidebarKeyboardActivation} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} accessibility_labels={accessibilityLabels} accessible_items={accessibleFileItems} accessibility_announcements={accessibilityAnnouncements} focus_cycle={keyboardFocusNavigation} accessibility_display={accessibilityDisplay} native_accessibility={(int)nativeAccessibilityOptions} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
+			$"sort_headers={sortHeaderRoundtrip} sort_accessibility={sortAccessibility} view_switch={viewModeRoundtrip} accessibility_labels={accessibilityLabels} accessible_items={accessibleFileItems} accessibility_announcements={accessibilityAnnouncements} focus_cycle={keyboardFocusNavigation} accessibility_display={accessibilityDisplay} native_accessibility={(int)nativeAccessibilityOptions} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -4904,6 +4925,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		SortNameItem.IsChecked = field is FileSortField.Name;
 		SortModifiedItem.IsChecked = field is FileSortField.Modified;
 		SortSizeItem.IsChecked = field is FileSortField.Size;
+		AnnounceSortState(Browser);
 	}
 
 	private void DetailsHeaderButton_Click(object sender, RoutedEventArgs e)
@@ -4925,7 +4947,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		ApplyDetailsSort(browser, field);
 	}
 
-	private void ApplyDetailsSort(DirectoryBrowserViewModel browser, FileSortField field)
+	private void ApplyDetailsSort(DirectoryBrowserViewModel browser, FileSortField field, bool announce = true)
 	{
 		FileSortDirection direction = browser.SortField == field
 			? browser.SortDirection is FileSortDirection.Ascending ? FileSortDirection.Descending : FileSortDirection.Ascending
@@ -4936,49 +4958,70 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		RestoreSelection(browser, targetControl, selection);
 		browser.UpdateSelection(selection);
 		UpdateSortHeaderVisuals();
+		if (announce)
+		{
+			AnnounceSortState(browser);
+		}
 	}
 
 	private void UpdateSortHeaderVisuals()
 	{
 		SetSortIndicators(
 			ViewModel.ActiveTab?.Browser,
-			PrimaryNameSortIndicator,
-			PrimaryModifiedSortIndicator,
-			PrimarySizeSortIndicator);
+			(PrimaryNameHeaderButton, PrimaryNameSortIndicator, FileSortField.Name, "NameColumn/Text"),
+			(PrimaryModifiedHeaderButton, PrimaryModifiedSortIndicator, FileSortField.Modified, "ModifiedColumn/Text"),
+			(PrimarySizeHeaderButton, PrimarySizeSortIndicator, FileSortField.Size, "SizeColumn/Text"));
 		SetSortIndicators(
 			ViewModel.ActiveTab?.SecondaryBrowser,
-			SecondaryNameSortIndicator,
-			SecondaryModifiedSortIndicator,
-			SecondarySizeSortIndicator);
+			(SecondaryNameHeaderButton, SecondaryNameSortIndicator, FileSortField.Name, "NameColumn/Text"),
+			(SecondaryModifiedHeaderButton, SecondaryModifiedSortIndicator, FileSortField.Modified, "ModifiedColumn/Text"),
+			(SecondarySizeHeaderButton, SecondarySizeSortIndicator, FileSortField.Size, "SizeColumn/Text"));
 	}
 
-	private static void SetSortIndicators(
+	private void SetSortIndicators(
 		DirectoryBrowserViewModel? browser,
-		PathIcon nameIndicator,
-		PathIcon modifiedIndicator,
-		PathIcon sizeIndicator)
+		params (Button Header, PathIcon Indicator, FileSortField Field, string LabelResource)[] columns)
 	{
-		foreach (PathIcon candidate in new[] { nameIndicator, modifiedIndicator, sizeIndicator })
+		foreach ((Button header, PathIcon indicator, FileSortField field, string labelResource) in columns)
 		{
-			candidate.Data = null;
-			candidate.Visibility = Visibility.Collapsed;
+			indicator.Data = null;
+			indicator.Visibility = Visibility.Collapsed;
+			string label = GetResource(labelResource);
+			string accessibilityName = browser?.SortField == field
+				? string.Format(
+					GetResource("SortedColumnAutomationFormat"),
+					label,
+					GetResource(browser.SortDirection is FileSortDirection.Ascending ? "SortAscendingItem/Text" : "SortDescendingItem/Text"))
+				: string.Format(GetResource("UnsortedColumnAutomationFormat"), label);
+			Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(header, accessibilityName);
+			ToolTipService.SetToolTip(header, accessibilityName);
 		}
 		if (browser is null)
 		{
 			return;
 		}
 
-		PathIcon indicator = browser.SortField switch
-		{
-			FileSortField.Modified => modifiedIndicator,
-			FileSortField.Size => sizeIndicator,
-			_ => nameIndicator,
-		};
+		PathIcon activeIndicator = columns.First(column => column.Field == browser.SortField).Indicator;
 		string path = browser.SortDirection is FileSortDirection.Ascending
 			? "M10,2 L18,10 L16,12 L12,8 V18 H8 V8 L4,12 L2,10 Z"
 			: "M8,2 H12 V12 L16,8 L18,10 L10,18 L2,10 L4,8 L8,12 Z";
-		indicator.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), path);
-		indicator.Visibility = Visibility.Visible;
+		activeIndicator.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), path);
+		activeIndicator.Visibility = Visibility.Visible;
+	}
+
+	private static string GetSortFieldResource(FileSortField field) => field switch
+	{
+		FileSortField.Modified => "ModifiedColumn/Text",
+		FileSortField.Size => "SizeColumn/Text",
+		_ => "NameColumn/Text",
+	};
+
+	private void AnnounceSortState(DirectoryBrowserViewModel browser)
+	{
+		ScheduleAccessibilityAnnouncement(string.Format(
+			GetResource("SortChangedAnnouncementFormat"),
+			GetResource(GetSortFieldResource(browser.SortField)),
+			GetResource(browser.SortDirection is FileSortDirection.Ascending ? "SortAscendingItem/Text" : "SortDescendingItem/Text")));
 	}
 
 	private void UpdateViewModeVisuals()
@@ -5014,6 +5057,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		Browser.SetSort(Browser.SortField, direction);
 		SortAscendingItem.IsChecked = direction is FileSortDirection.Ascending;
 		SortDescendingItem.IsChecked = direction is FileSortDirection.Descending;
+		AnnounceSortState(Browser);
 	}
 
 	private ContentDialog CreateTextInputDialog(string titleResource, string primaryButtonResource, TextBox input)

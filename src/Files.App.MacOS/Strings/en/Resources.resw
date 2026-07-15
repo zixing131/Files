@@ -517,4 +517,7 @@
   <data name="SidebarSectionCollapsedHelpText" xml:space="preserve"><value>Collapsed. Press Return or Space to expand.</value></data>
   <data name="StatusBarAutomationName" xml:space="preserve"><value>File list status</value></data>
   <data name="PreviewSelectionAutomationName" xml:space="preserve"><value>Preview selection</value></data>
+  <data name="SortedColumnAutomationFormat" xml:space="preserve"><value>{0}, sorted {1}. Press Return to reverse the order.</value></data>
+  <data name="UnsortedColumnAutomationFormat" xml:space="preserve"><value>{0}. Press Return to sort ascending.</value></data>
+  <data name="SortChangedAnnouncementFormat" xml:space="preserve"><value>Sorted by {0}, {1}.</value></data>
 </root>
