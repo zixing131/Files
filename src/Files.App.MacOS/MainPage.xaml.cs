@@ -452,6 +452,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		var itemIconConverter = new Converters.FileSystemItemToIconConverter();
 		bool itemFallbackIcons = itemIconConverter.Convert(true, typeof(Microsoft.UI.Xaml.Media.Geometry), null!, string.Empty) is Microsoft.UI.Xaml.Media.Geometry &&
 			itemIconConverter.Convert(false, typeof(Microsoft.UI.Xaml.Media.Geometry), null!, string.Empty) is Microsoft.UI.Xaml.Media.Geometry;
+		string expectedSplitViewLabel = GetResource(ViewModel.ActiveTab?.IsSplitView is true
+			? "CloseSplitViewButtonText"
+			: "SplitViewButton/Content");
+		bool dynamicCommandLabels = SplitViewButton.Content is CommandLabel { Content: var splitViewLabel } &&
+			splitViewLabel == expectedSplitViewLabel &&
+			MoreSelectionSubItem.Text == GetResource("MoreSelectionSubItem/Text") &&
+			MoreArchiveSubItem.Text == GetResource("MoreArchiveSubItem/Text");
 		FileSortField initialSortField = browser.SortField;
 		FileSortDirection initialSortDirection = browser.SortDirection;
 		FileSortField diagnosticSortField = initialSortField is FileSortField.Modified ? FileSortField.Size : FileSortField.Modified;
@@ -632,7 +639,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"items={browser.Items.Count} realized={realizedContainers} selection_roundtrip={selectionRoundtrip} " +
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} keyboard_resize={keyboardResize} sidebar_active={sidebarActiveSync} sidebar_keyboard={sidebarKeyboardActivation} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
-			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
+			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} dynamic_labels={dynamicCommandLabels} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
 			$"sort_headers={sortHeaderRoundtrip} sort_accessibility={sortAccessibility} view_switch={viewModeRoundtrip} accessibility_labels={accessibilityLabels} accessible_items={accessibleFileItems} item_accessibility={itemAccessibility} accessibility_announcements={accessibilityAnnouncements} focus_cycle={keyboardFocusNavigation} accessibility_display={accessibilityDisplay} native_accessibility={(int)nativeAccessibilityOptions} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
@@ -4870,7 +4877,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		SecondaryPaneBorder.BorderBrush = secondaryIsActive ? activeBorder : defaultBorder;
 		if (SplitViewButton.Content is CommandLabel splitViewLabel)
 		{
-			splitViewLabel.Content = GetResource(ViewModel.ActiveTab?.IsSplitView is true ? "CloseSplitViewButtonText" : "SplitViewButton.Content");
+			splitViewLabel.Content = GetResource(ViewModel.ActiveTab?.IsSplitView is true ? "CloseSplitViewButtonText" : "SplitViewButton/Content");
 		}
 		UpdateSortHeaderVisuals();
 		UpdateViewModeVisuals();

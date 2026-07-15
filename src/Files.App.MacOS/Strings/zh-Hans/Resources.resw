@@ -21,7 +21,7 @@
   <data name="SidebarNetworkHeading" xml:space="preserve"><value>网络</value></data>
   <data name="SidebarDrivesHeading" xml:space="preserve"><value>驱动器</value></data>
   <data name="SidebarHomeButton.Content" xml:space="preserve">
-    <value>个人目录</value>
+    <value>主页</value>
   </data>
   <data name="SidebarDesktopButton.Content" xml:space="preserve">
     <value>桌面</value>
@@ -78,7 +78,7 @@
     <value>视图</value>
   </data>
   <data name="HomeTabHeader" xml:space="preserve">
-    <value>个人目录</value>
+    <value>主页</value>
   </data>
   <data name="NameColumn.Text" xml:space="preserve">
     <value>名称</value>
