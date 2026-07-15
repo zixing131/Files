@@ -563,19 +563,19 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		bool sidebarActiveSync = SidebarList.SelectedItem is SidebarLocation activeLocation &&
 			!activeLocation.IsHeader && IsSameOrDescendantPath(browser.CurrentPath, activeLocation.Path);
 		int initialSidebarLocationCount = ViewModel.Locations.Count;
-		SidebarLocation librariesHeader = ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Libraries" });
+		SidebarLocation librariesHeader = ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Locations" });
 		bool initialLibrariesExpanded = librariesHeader.IsExpanded;
 		SidebarList.SelectedItem = librariesHeader;
-		bool sidebarKeyboardActivation = ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Libraries" }).IsExpanded == initialLibrariesExpanded;
+		bool sidebarKeyboardActivation = ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Locations" }).IsExpanded == initialLibrariesExpanded;
 		SidebarList.SelectedItem = null;
 		ToggleSidebarHeader(librariesHeader);
 		bool sidebarSectionChanged = ViewModel.Locations.Count != initialSidebarLocationCount &&
-			ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Libraries" }).IsExpanded != initialLibrariesExpanded;
-		SidebarLocation changedLibrariesHeader = ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Libraries" });
+			ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Locations" }).IsExpanded != initialLibrariesExpanded;
+		SidebarLocation changedLibrariesHeader = ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Locations" });
 		sidebarKeyboardActivation &= sidebarSectionChanged && !string.IsNullOrWhiteSpace(changedLibrariesHeader.AccessibilityState);
 		ToggleSidebarHeader(changedLibrariesHeader);
 		bool sidebarSectionRoundtrip = sidebarSectionChanged && ViewModel.Locations.Count == initialSidebarLocationCount &&
-			ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Libraries" }).IsExpanded == initialLibrariesExpanded;
+			ViewModel.Locations.First(static location => location is { IsHeader: true, SectionId: "Locations" }).IsExpanded == initialLibrariesExpanded;
 		UpdateSidebarSelection();
 		await Task.Delay(750);
 		App app = (App)Application.Current;

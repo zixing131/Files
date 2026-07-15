@@ -17,7 +17,7 @@
   </data>
   <data name="SidebarFavoritesHeading" xml:space="preserve"><value>Favorites</value></data>
   <data name="SidebarRecentHeading" xml:space="preserve"><value>Recent</value></data>
-  <data name="SidebarLibrariesHeading" xml:space="preserve"><value>Libraries</value></data>
+  <data name="SidebarLibrariesHeading" xml:space="preserve"><value>Locations</value></data>
   <data name="SidebarNetworkHeading" xml:space="preserve"><value>Network</value></data>
   <data name="SidebarDrivesHeading" xml:space="preserve"><value>Drives</value></data>
   <data name="SidebarHomeButton.Content" xml:space="preserve">

@@ -15,9 +15,9 @@
   <data name="LocationsHeading.Text" xml:space="preserve">
     <value>位置</value>
   </data>
-  <data name="SidebarFavoritesHeading" xml:space="preserve"><value>收藏夹</value></data>
+  <data name="SidebarFavoritesHeading" xml:space="preserve"><value>个人收藏</value></data>
   <data name="SidebarRecentHeading" xml:space="preserve"><value>最近使用</value></data>
-  <data name="SidebarLibrariesHeading" xml:space="preserve"><value>库</value></data>
+  <data name="SidebarLibrariesHeading" xml:space="preserve"><value>位置</value></data>
   <data name="SidebarNetworkHeading" xml:space="preserve"><value>网络</value></data>
   <data name="SidebarDrivesHeading" xml:space="preserve"><value>驱动器</value></data>
   <data name="SidebarHomeButton.Content" xml:space="preserve">

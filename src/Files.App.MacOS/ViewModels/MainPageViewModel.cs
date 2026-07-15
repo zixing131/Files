@@ -519,18 +519,36 @@ public sealed class MainPageViewModel : ObservableObject
 	{
 		SidebarLocationOption[] defaultLocations = GetDefaultSidebarLocations();
 		var hiddenLocations = (settings.HiddenDefaultSidebarLocations ?? []).ToHashSet(StringComparer.Ordinal);
-		List<SidebarLocation> pinnedLocations = defaultLocations
-			.Where(static location => location.Id is "Home" or "Applications" or "Shared" or "ICloud" or "Trash")
-			.Where(location => !hiddenLocations.Contains(location.Id))
-			.Select(static location => new SidebarLocation(location.Name, location.Path, location.Glyph, ExternalUrl: location.ExternalUrl))
-			.ToList();
-		List<SidebarLocation> libraryLocations = defaultLocations
-			.Where(static location => location.Id is "Desktop" or "Downloads" or "Documents" or "Pictures" or "Music" or "Movies")
+		List<SidebarLocation> favoriteLocations = defaultLocations
+			.Where(static location => location.Id is "Applications" or "Downloads" or "Documents" or "Desktop" or "Pictures" or "Music" or "Movies")
 			.Where(location => !hiddenLocations.Contains(location.Id))
 			.Select(static location => new SidebarLocation(location.Name, location.Path, location.Glyph))
 			.ToList();
+		List<SidebarLocation> finderLocations = defaultLocations
+			.Where(static location => location.Id is "ICloud" or "Home")
+			.Where(location => !hiddenLocations.Contains(location.Id))
+			.Select(static location => new SidebarLocation(location.Name, location.Path, location.Glyph, ExternalUrl: location.ExternalUrl))
+			.ToList();
+		SidebarLocation? sharedLocation = defaultLocations
+			.Where(static location => location.Id is "Shared")
+			.Where(location => !hiddenLocations.Contains(location.Id))
+			.Select(static location => new SidebarLocation(location.Name, location.Path, location.Glyph))
+			.FirstOrDefault();
+		SidebarLocation? trashLocation = defaultLocations
+			.Where(static location => location.Id is "Trash")
+			.Where(location => !hiddenLocations.Contains(location.Id))
+			.Select(static location => new SidebarLocation(location.Name, location.Path, location.Glyph, ExternalUrl: location.ExternalUrl))
+			.FirstOrDefault();
 
-		var knownPaths = new HashSet<string>(pinnedLocations.Concat(libraryLocations).Select(static location => location.Path), StringComparer.OrdinalIgnoreCase);
+		var knownPaths = new HashSet<string>(favoriteLocations.Concat(finderLocations).Select(static location => location.Path), StringComparer.OrdinalIgnoreCase);
+		if (sharedLocation is not null)
+		{
+			knownPaths.Add(sharedLocation.Path);
+		}
+		if (trashLocation is not null)
+		{
+			knownPaths.Add(trashLocation.Path);
+		}
 		foreach (string configuredPath in settings.FavoritePaths ?? [])
 		{
 			string favoritePath;
@@ -549,7 +567,7 @@ public sealed class MainPageViewModel : ObservableObject
 			}
 
 			string name = Path.GetFileName(Path.TrimEndingDirectorySeparator(favoritePath));
-			pinnedLocations.Add(new(string.IsNullOrEmpty(name) ? favoritePath : name, favoritePath, "★"));
+			favoriteLocations.Add(new(string.IsNullOrEmpty(name) ? favoritePath : name, favoritePath, "★"));
 		}
 
 		var networkLocations = new List<SidebarLocation>();
@@ -614,11 +632,19 @@ public sealed class MainPageViewModel : ObservableObject
 		var collapsedSections = (settings.CollapsedSidebarSections ?? []).ToHashSet(StringComparer.Ordinal);
 		hasRecentLocations = recentLocations.Count > 0;
 		var locations = new List<SidebarLocation>();
-		AppendSection(locations, "Favorites", GetResource("SidebarFavoritesHeading"), pinnedLocations, collapsedSections);
 		AppendSection(locations, "Recent", GetResource("SidebarRecentHeading"), recentLocations, collapsedSections);
-		AppendSection(locations, "Libraries", GetResource("SidebarLibrariesHeading"), libraryLocations, collapsedSections);
+		if (sharedLocation is not null)
+		{
+			locations.Add(sharedLocation);
+		}
+		AppendSection(locations, "Favorites", GetResource("SidebarFavoritesHeading"), favoriteLocations, collapsedSections);
+		finderLocations.AddRange(driveLocations);
+		if (trashLocation is not null)
+		{
+			finderLocations.Add(trashLocation);
+		}
+		AppendSection(locations, "Locations", GetResource("SidebarLibrariesHeading"), finderLocations, collapsedSections);
 		AppendSection(locations, "Network", GetResource("SidebarNetworkHeading"), networkLocations, collapsedSections);
-		AppendSection(locations, "Drives", GetResource("SidebarDrivesHeading"), driveLocations, collapsedSections);
 
 		Locations.Clear();
 		foreach (SidebarLocation location in locations)
@@ -633,7 +659,7 @@ public sealed class MainPageViewModel : ObservableObject
 		string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 		return new[]
 		{
-			new SidebarLocationOption("Home", GetResource("SidebarHomeButton/Content"), home, "⌂"),
+			new SidebarLocationOption("Home", Path.GetFileName(home), home, "⌂"),
 			new SidebarLocationOption("Applications", GetResource("ApplicationsFolderDisplayName"), "/Applications", "A"),
 			new SidebarLocationOption("Shared", GetResource("SidebarSharedLocationName"), "/Users/Shared", "S"),
 			new SidebarLocationOption("ICloud", GetResource("SidebarICloudLocationName"), Path.Combine(home, "Library/Mobile Documents/com~apple~CloudDocs"), "☁"),
@@ -654,7 +680,7 @@ public sealed class MainPageViewModel : ObservableObject
 
 	public string[] ToggleSidebarSection(string sectionId)
 	{
-		if (sectionId is not ("Favorites" or "Recent" or "Libraries" or "Network" or "Drives"))
+		if (sectionId is not ("Favorites" or "Recent" or "Locations" or "Network"))
 		{
 			return settings.CollapsedSidebarSections ?? [];
 		}
