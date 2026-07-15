@@ -411,6 +411,14 @@
   <data name="AddSidebarLocationButtonText" xml:space="preserve"><value>Add folder…</value></data>
   <data name="TerminalSettingLabel" xml:space="preserve"><value>Default terminal</value></data>
   <data name="SidebarTrashLocationName" xml:space="preserve"><value>Trash</value></data>
+  <data name="SidebarAirDropLocationName" xml:space="preserve"><value>AirDrop</value></data>
+  <data name="EjectVolumeButton.AutomationProperties.Name" xml:space="preserve"><value>Eject volume</value></data>
+  <data name="EjectVolumeButton.ToolTipService.ToolTip" xml:space="preserve"><value>Eject</value></data>
+  <data name="EjectVolumeDialogTitle" xml:space="preserve"><value>Eject volume?</value></data>
+  <data name="EjectVolumeDialogMessageFormat" xml:space="preserve"><value>Are you sure you want to eject “{0}”?</value></data>
+  <data name="EjectVolumeButtonText" xml:space="preserve"><value>Eject</value></data>
+  <data name="EjectVolumeCompletedFormat" xml:space="preserve"><value>Ejected {0}.</value></data>
+  <data name="EjectVolumeErrorMessage" xml:space="preserve"><value>The volume could not be ejected. Make sure no files on it are in use.</value></data>
   <data name="DropCopyCaption" xml:space="preserve"><value>Copy to this folder</value></data>
   <data name="DropItemsErrorMessage" xml:space="preserve"><value>The dropped items couldn't be copied.</value></data>
   <data name="NewFolderMenuItem.Text" xml:space="preserve"><value>Folder</value></data>

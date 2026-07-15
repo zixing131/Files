@@ -24,6 +24,7 @@ public sealed class SidebarGlyphToIconConverter : IValueConverter
 		["A"] = "M10,1 L18,17 H14.8 L13,13 H7 L5.2,17 H2 Z M8.2,10 H11.8 L10,5.8 Z",
 		["S"] = "M2,5 H8 L10,7 H18 V17 H2 Z M9,9 A2,2 0 1 0 9,13 A2,2 0 0 0 9,9 Z M12,10 A1.5,1.5 0 1 0 12,13 A1.5,1.5 0 0 0 12,10 Z M5,16 C5.3,13.8 6.7,13 9,13 C11.3,13 12.7,13.8 13,16 Z",
 		["T"] = "M4,5 H16 L15,18 H5 Z M7,7 V16 H9 V7 Z M11,7 V16 H13 V7 Z M3,3 H7 L8,1 H12 L13,3 H17 V5 H3 Z",
+		["R"] = "M10,2 A8,8 0 1 1 2,10 A8,8 0 0 1 10,2 Z M10,4 A6,6 0 1 0 16,10 A6,6 0 0 0 10,4 Z M10,6 A4,4 0 1 1 6,10 A4,4 0 0 1 10,6 Z M10,8 A2,2 0 1 0 12,10 A2,2 0 0 0 10,8 Z",
 	};
 
 	public object? Convert(object value, Type targetType, object parameter, string language)

@@ -1044,6 +1044,43 @@ __attribute__((visibility("default"))) int files_macos_reveal_path(const char *p
 	}
 }
 
+__attribute__((visibility("default"))) int files_macos_open_url(const char *url)
+{
+	@autoreleasepool
+	{
+		NSString *value = url == NULL ? nil : [NSString stringWithUTF8String:url];
+		NSURL *targetURL = value == nil ? nil : [NSURL URLWithString:value];
+		return targetURL != nil && [[NSWorkspace sharedWorkspace] openURL:targetURL] ? 1 : 0;
+	}
+}
+
+__attribute__((visibility("default"))) int files_macos_eject_volume(const char *path)
+{
+	@autoreleasepool
+	{
+		NSURL *volumeURL = files_url_from_path(path);
+		if (volumeURL == nil)
+		{
+			return 0;
+		}
+
+		__block BOOL success = NO;
+		void (^ejectBlock)(void) = ^{
+			NSError *error = nil;
+			success = [[NSWorkspace sharedWorkspace] unmountAndEjectDeviceAtURL:volumeURL error:&error];
+		};
+		if ([NSThread isMainThread])
+		{
+			ejectBlock();
+		}
+		else
+		{
+			dispatch_sync(dispatch_get_main_queue(), ejectBlock);
+		}
+		return success ? 1 : 0;
+	}
+}
+
 __attribute__((visibility("default"))) int files_macos_open_terminal(const char *path, const char *bundleIdentifier)
 {
 	@autoreleasepool

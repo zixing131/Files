@@ -1738,7 +1738,18 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 		if (SidebarList.SelectedItem is SidebarLocation location && Browser is not null)
 		{
-			if (location.IsNetworkServer)
+			if (!string.IsNullOrWhiteSpace(location.ExternalUrl))
+			{
+				try
+				{
+					await WorkspaceService.OpenUrlAsync(location.ExternalUrl);
+				}
+				catch (IOException)
+				{
+					await ShowErrorAsync(GetResource("OpenItemErrorMessage"));
+				}
+			}
+			else if (location.IsNetworkServer)
 			{
 				await ConnectToServerAsync(location.Path);
 			}
@@ -1754,6 +1765,45 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		if (e.ClickedItem is SidebarLocation { IsHeader: true } header)
 		{
 			ToggleSidebarHeader(header);
+		}
+	}
+
+	private async void EjectVolumeButton_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is not Button { Tag: SidebarLocation { CanEject: true } volume })
+		{
+			return;
+		}
+		var dialog = new ContentDialog
+		{
+			Title = GetResource("EjectVolumeDialogTitle"),
+			Content = string.Format(GetResource("EjectVolumeDialogMessageFormat"), volume.Name),
+			PrimaryButtonText = GetResource("EjectVolumeButtonText"),
+			CloseButtonText = GetResource("CancelButtonText"),
+			DefaultButton = ContentDialogButton.Close,
+			XamlRoot = XamlRoot,
+		};
+		if (await dialog.ShowAsync() is not ContentDialogResult.Primary)
+		{
+			return;
+		}
+
+		try
+		{
+			if (Browser is DirectoryBrowserViewModel browser && IsSameOrDescendantPath(browser.CurrentPath, volume.Path))
+			{
+				await browser.NavigateHomeAsync();
+			}
+			await WorkspaceService.EjectVolumeAsync(volume.Path);
+			ViewModel.RefreshLocations();
+			if (Browser is not null)
+			{
+				Browser.StatusText = string.Format(GetResource("EjectVolumeCompletedFormat"), volume.Name);
+			}
+		}
+		catch (IOException)
+		{
+			await ShowErrorAsync(GetResource("EjectVolumeErrorMessage"));
 		}
 	}
 

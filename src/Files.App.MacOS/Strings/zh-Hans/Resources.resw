@@ -411,6 +411,14 @@
   <data name="AddSidebarLocationButtonText" xml:space="preserve"><value>添加文件夹…</value></data>
   <data name="TerminalSettingLabel" xml:space="preserve"><value>默认终端</value></data>
   <data name="SidebarTrashLocationName" xml:space="preserve"><value>废纸篓</value></data>
+  <data name="SidebarAirDropLocationName" xml:space="preserve"><value>隔空投送</value></data>
+  <data name="EjectVolumeButton.AutomationProperties.Name" xml:space="preserve"><value>弹出驱动器</value></data>
+  <data name="EjectVolumeButton.ToolTipService.ToolTip" xml:space="preserve"><value>弹出</value></data>
+  <data name="EjectVolumeDialogTitle" xml:space="preserve"><value>弹出驱动器？</value></data>
+  <data name="EjectVolumeDialogMessageFormat" xml:space="preserve"><value>确定要弹出“{0}”吗？</value></data>
+  <data name="EjectVolumeButtonText" xml:space="preserve"><value>弹出</value></data>
+  <data name="EjectVolumeCompletedFormat" xml:space="preserve"><value>已弹出 {0}。</value></data>
+  <data name="EjectVolumeErrorMessage" xml:space="preserve"><value>无法弹出驱动器，请确认其中的文件未被占用。</value></data>
   <data name="DropCopyCaption" xml:space="preserve"><value>复制到此文件夹</value></data>
   <data name="DropItemsErrorMessage" xml:space="preserve"><value>无法复制拖入的项目。</value></data>
   <data name="NewFolderMenuItem.Text" xml:space="preserve"><value>文件夹</value></data>

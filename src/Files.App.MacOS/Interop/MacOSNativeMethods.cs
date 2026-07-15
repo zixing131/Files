@@ -83,6 +83,12 @@ internal static partial class MacOSNativeMethods
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_reveal_path", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial int RevealPath(string path);
 
+	[LibraryImport(LibraryName, EntryPoint = "files_macos_open_url", StringMarshalling = StringMarshalling.Utf8)]
+	internal static partial int OpenUrl(string url);
+
+	[LibraryImport(LibraryName, EntryPoint = "files_macos_eject_volume", StringMarshalling = StringMarshalling.Utf8)]
+	internal static partial int EjectVolume(string path);
+
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_open_terminal", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial int OpenTerminal(string path, string bundleIdentifier);
 

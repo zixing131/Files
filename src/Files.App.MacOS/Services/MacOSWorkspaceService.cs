@@ -90,6 +90,16 @@ public sealed class MacOSWorkspaceService : IMacOSWorkspaceService
 		return InvokeAsync(path, MacOSNativeMethods.RevealPath, cancellationToken);
 	}
 
+	public Task OpenUrlAsync(string url, CancellationToken cancellationToken = default)
+	{
+		return InvokeAsync(url, MacOSNativeMethods.OpenUrl, cancellationToken);
+	}
+
+	public Task EjectVolumeAsync(string path, CancellationToken cancellationToken = default)
+	{
+		return InvokeAsync(path, MacOSNativeMethods.EjectVolume, cancellationToken);
+	}
+
 	public Task OpenTerminalAsync(string path, TerminalPreference terminal, CancellationToken cancellationToken = default)
 	{
 		string bundleIdentifier = terminal switch

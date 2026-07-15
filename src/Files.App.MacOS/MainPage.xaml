@@ -296,11 +296,23 @@
 								<Grid
 									MinHeight="36"
 									Padding="8,0"
-									ColumnDefinitions="24,*"
+									ColumnDefinitions="24,*,28"
 									ColumnSpacing="8"
 									Visibility="{Binding IsHeader, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
 									<PathIcon Width="18" Height="18" Data="{Binding DisplayGlyph, Converter={StaticResource SidebarGlyphToIconConverter}}" Foreground="{ThemeResource FilesAccentBrush}" VerticalAlignment="Center" />
 									<TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+									<Button
+										x:Uid="EjectVolumeButton"
+										Grid.Column="2"
+										Width="26"
+										Height="26"
+										Padding="0"
+										Click="EjectVolumeButton_Click"
+										Style="{StaticResource FilesFlatButtonStyle}"
+										Tag="{Binding}"
+										Visibility="{Binding CanEject, Converter={StaticResource BooleanToVisibilityConverter}}">
+										<PathIcon Width="14" Height="14" Data="M2,10 L7,4 L12,10 Z M2,12 H12 V14 H2 Z" />
+									</Button>
 								</Grid>
 							</Grid>
 							</DataTemplate>

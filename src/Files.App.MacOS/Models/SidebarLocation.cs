@@ -1,12 +1,14 @@
 namespace Files.App.MacOS.Models;
 
-public sealed record SidebarLocationOption(string Id, string Name, string Path, string Glyph);
+public sealed record SidebarLocationOption(string Id, string Name, string Path, string Glyph, string ExternalUrl = "");
 
 public sealed record SidebarLocation(
 	string Name,
 	string Path,
 	string Glyph,
 	bool IsNetworkServer = false,
+	string ExternalUrl = "",
+	bool CanEject = false,
 	bool IsHeader = false,
 	string SectionId = "",
 	bool IsExpanded = true,

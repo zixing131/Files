@@ -520,9 +520,9 @@ public sealed class MainPageViewModel : ObservableObject
 		SidebarLocationOption[] defaultLocations = GetDefaultSidebarLocations();
 		var hiddenLocations = (settings.HiddenDefaultSidebarLocations ?? []).ToHashSet(StringComparer.Ordinal);
 		List<SidebarLocation> pinnedLocations = defaultLocations
-			.Where(static location => location.Id is "Home" or "Applications" or "Shared" or "ICloud" or "Trash")
+			.Where(static location => location.Id is "Home" or "Applications" or "Shared" or "ICloud" or "Trash" or "AirDrop")
 			.Where(location => !hiddenLocations.Contains(location.Id))
-			.Select(static location => new SidebarLocation(location.Name, location.Path, location.Glyph))
+			.Select(static location => new SidebarLocation(location.Name, location.Path, location.Glyph, ExternalUrl: location.ExternalUrl))
 			.ToList();
 		List<SidebarLocation> libraryLocations = defaultLocations
 			.Where(static location => location.Id is "Desktop" or "Downloads" or "Documents" or "Pictures" or "Music" or "Movies")
@@ -578,7 +578,13 @@ public sealed class MainPageViewModel : ObservableObject
 				string name = path == "/"
 					? GetResource("SystemVolumeName")
 					: string.IsNullOrWhiteSpace(drive.VolumeLabel) ? Path.GetFileName(Path.TrimEndingDirectorySeparator(path)) : drive.VolumeLabel;
-				driveLocations.Add(new(name, path, drive.DriveType is DriveType.Network ? "☁" : "◉"));
+				bool isNetworkDrive = drive.DriveType is DriveType.Network;
+				driveLocations.Add(new(
+					name,
+					path,
+					isNetworkDrive ? "☁" : "◉",
+					IsNetworkServer: isNetworkDrive,
+					CanEject: !isNetworkDrive && path.StartsWith("/Volumes/", StringComparison.Ordinal)));
 			}
 			catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 			{
@@ -632,13 +638,14 @@ public sealed class MainPageViewModel : ObservableObject
 			new SidebarLocationOption("Shared", GetResource("SidebarSharedLocationName"), "/Users/Shared", "S"),
 			new SidebarLocationOption("ICloud", GetResource("SidebarICloudLocationName"), Path.Combine(home, "Library/Mobile Documents/com~apple~CloudDocs"), "☁"),
 			new SidebarLocationOption("Trash", GetResource("SidebarTrashLocationName"), Path.Combine(home, ".Trash"), "T"),
+			new SidebarLocationOption("AirDrop", GetResource("SidebarAirDropLocationName"), string.Empty, "R", "airdrop://"),
 			new SidebarLocationOption("Desktop", GetResource("SidebarDesktopButton/Content"), Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "▣"),
 			new SidebarLocationOption("Downloads", GetResource("SidebarDownloadsButton/Content"), Path.Combine(home, "Downloads"), "↓"),
 			new SidebarLocationOption("Documents", GetResource("SidebarDocumentsButton/Content"), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "▤"),
 			new SidebarLocationOption("Pictures", GetResource("SidebarPicturesButton/Content"), Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "▧"),
 			new SidebarLocationOption("Music", GetResource("SidebarMusicButton/Content"), Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "♫"),
 			new SidebarLocationOption("Movies", GetResource("SidebarMoviesButton/Content"), Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "▶"),
-		}.Where(static location => Directory.Exists(location.Path)).ToArray();
+		}.Where(static location => !string.IsNullOrWhiteSpace(location.ExternalUrl) || Directory.Exists(location.Path)).ToArray();
 	}
 
 	public string[] ToggleSidebarSection(string sectionId)
