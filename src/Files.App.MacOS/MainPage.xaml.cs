@@ -5068,21 +5068,37 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void Items_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
 	{
-		if (sender is not FrameworkElement control || FindVisualDescendant<ScrollViewer>(control) is not ScrollViewer scrollViewer)
+		if (sender is not FrameworkElement control)
 		{
 			return;
 		}
 
 		int delta = e.GetCurrentPoint(control).Properties.MouseWheelDelta;
-		if (delta is 0 || scrollViewer.ScrollableHeight <= 0)
+		if (delta is 0)
 		{
 			return;
 		}
 
 		double distance = GetAcceleratedWheelDistance(delta);
-		double targetOffset = Math.Clamp(scrollViewer.VerticalOffset + distance, 0, scrollViewer.ScrollableHeight);
-		scrollViewer.ChangeView(null, targetOffset, null, disableAnimation: false);
-		e.Handled = true;
+		if (control is ItemsView { ScrollView: ScrollView scrollView })
+		{
+			double maximumOffset = Math.Max(0, scrollView.ExtentHeight - scrollView.ViewportHeight);
+			if (maximumOffset > 0)
+			{
+				double targetOffset = Math.Clamp(scrollView.VerticalOffset + distance, 0, maximumOffset);
+				scrollView.ScrollTo(
+					scrollView.HorizontalOffset,
+					targetOffset,
+					new ScrollingScrollOptions(ScrollingAnimationMode.Enabled, ScrollingSnapPointsMode.Ignore));
+				e.Handled = true;
+			}
+		}
+		else if (FindVisualDescendant<ScrollViewer>(control) is ScrollViewer scrollViewer && scrollViewer.ScrollableHeight > 0)
+		{
+			double targetOffset = Math.Clamp(scrollViewer.VerticalOffset + distance, 0, scrollViewer.ScrollableHeight);
+			scrollViewer.ChangeView(null, targetOffset, null, disableAnimation: false);
+			e.Handled = true;
+		}
 	}
 
 	private double GetAcceleratedWheelDistance(int delta)
