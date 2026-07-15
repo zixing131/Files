@@ -3,6 +3,7 @@ using Files.App.MacOS.Models;
 using Files.App.MacOS.Services;
 using Files.App.MacOS.ViewModels;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.ApplicationModel.Resources;
 using Windows.Storage;
@@ -258,6 +259,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		UpdateSidebarSelection();
 		UpdatePreviewPaneVisuals();
 		UpdateCommandStates();
+		RevealInitializedInterface();
 		App app = (App)Application.Current;
 		app.UpdateMainMenu(this);
 		if (restoresWorkspace)
@@ -273,6 +275,31 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			_ = ReportPerformanceDiagnosticsWithErrorReportingAsync();
 		}
+	}
+
+	private void RevealInitializedInterface()
+	{
+		RootLayout.UpdateLayout();
+		UpdateCommandToolbarLayout(CommandToolbarBorder.ActualWidth);
+		RootLayout.IsHitTestVisible = true;
+		if (accessibilityDisplayOptions.HasFlag(MacOSAccessibilityDisplayOptions.ReduceMotion))
+		{
+			RootLayout.Opacity = 1;
+			return;
+		}
+
+		var animation = new DoubleAnimation
+		{
+			From = 0,
+			To = 1,
+			Duration = new Duration(TimeSpan.FromMilliseconds(140)),
+			EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+		};
+		Storyboard.SetTarget(animation, RootLayout);
+		Storyboard.SetTargetProperty(animation, "Opacity");
+		var storyboard = new Storyboard();
+		storyboard.Children.Add(animation);
+		storyboard.Begin();
 	}
 
 	internal Task InitializationTask => initializationCompletion.Task;

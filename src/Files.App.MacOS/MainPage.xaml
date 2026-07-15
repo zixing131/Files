@@ -78,7 +78,7 @@
 		<KeyboardAccelerator Key="K" Modifiers="Windows,Shift" Invoked="DuplicateTabAccelerator_Invoked" />
 	</Page.KeyboardAccelerators>
 
-	<Grid RowDefinitions="44,48,*">
+	<Grid x:Name="RootLayout" IsHitTestVisible="False" Opacity="0" RowDefinitions="44,48,*">
 		<!--  Tab strip  -->
 		<Border x:Name="TitleBarBackground" Grid.Row="0" Background="{ThemeResource FilesBackgroundBrush}" />
 		<TabView
