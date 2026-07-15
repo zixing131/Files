@@ -22,6 +22,7 @@ public partial class App : Application, IMacOSMenuCommandTarget
 	private bool isMainMenuInstalled;
 	private bool hasRestoredWindowSession;
 	private bool isRestoringWindowSession;
+	private MacOSAccessibilityDisplayOptions accessibilityDisplayOptions;
 
 	public App()
 	{
@@ -41,6 +42,8 @@ public partial class App : Application, IMacOSMenuCommandTarget
 	internal int WindowCount => windows.Count;
 
 	internal MainPage? ActivePage => activePage;
+
+	internal MacOSAccessibilityDisplayOptions AccessibilityDisplayOptions => accessibilityDisplayOptions;
 
 	internal bool WindowsUseUnifiedTitleBars => nativeWindowIdentifiers.Values.All(MacOSWindowPlacementService.UsesUnifiedTitleBar);
 
@@ -75,6 +78,7 @@ public partial class App : Application, IMacOSMenuCommandTarget
 		window.Activate();
 		nativeWindowHandles[window] = MacOSWindowPlacementService.GetNativeWindowHandle(window);
 		ConfigureNativeWindow(window);
+		RefreshAccessibilityDisplayOptions();
 		UpdateMainMenu(page);
 		return window;
 	}
@@ -208,6 +212,7 @@ public partial class App : Application, IMacOSMenuCommandTarget
 
 		activePage = page;
 		ConfigureNativeWindow(window);
+		RefreshAccessibilityDisplayOptions();
 		activationOrder.Remove(window);
 		activationOrder.Add(window);
 		mainMenuService.UpdateValidationSnapshot(this);
@@ -268,6 +273,21 @@ public partial class App : Application, IMacOSMenuCommandTarget
 		if (pendingWindowPlacements.Remove(window, out WindowPlacementState? placement) && placement is not null)
 		{
 			MacOSWindowPlacementService.ApplyPlacement(identifier, placement);
+		}
+	}
+
+	private void RefreshAccessibilityDisplayOptions()
+	{
+		MacOSAccessibilityDisplayOptions options = MacOSAccessibilityDisplayService.GetCurrentOptions();
+		if (options == accessibilityDisplayOptions && windows.Values.All(page => page.AccessibilityDisplayOptions == options))
+		{
+			return;
+		}
+
+		accessibilityDisplayOptions = options;
+		foreach (MainPage page in windows.Values)
+		{
+			page.ApplyAccessibilityDisplayOptions(options);
 		}
 	}
 

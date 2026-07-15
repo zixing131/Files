@@ -313,7 +313,7 @@
 				Grid.Column="1"
 				KeyDown="SidebarDivider_KeyDown"
 				Style="{StaticResource DividerButtonStyle}">
-				<Border Width="1" HorizontalAlignment="Center" Background="{ThemeResource FilesCardBorderBrush}" />
+				<Border x:Name="SidebarDividerLine" Width="1" HorizontalAlignment="Center" Background="{ThemeResource FilesCardBorderBrush}" />
 			</Button>
 
 			<Grid Grid.Column="2" Padding="8,6,8,8" RowDefinitions="48,*,36">
@@ -667,6 +667,7 @@
 						Style="{StaticResource DividerButtonStyle}"
 						Visibility="{Binding ActiveTab.IsSplitView, Converter={StaticResource BooleanToVisibilityConverter}}">
 						<Border
+							x:Name="SplitDividerLine"
 							Width="1"
 							HorizontalAlignment="Center"
 							Background="{ThemeResource FilesCardBorderBrush}" />

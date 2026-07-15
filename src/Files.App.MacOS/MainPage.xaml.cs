@@ -51,6 +51,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private bool isSidebarOpen = true;
 	private double sidebarWidth = 228;
 	private bool isPreviewPaneOpen;
+	private MacOSAccessibilityDisplayOptions accessibilityDisplayOptions;
 	private readonly bool restoresWorkspace;
 	private readonly WorkspaceState? initialWorkspace;
 	private readonly WindowPlacementState? initialPlacement;
@@ -215,6 +216,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	internal Task InitializationTask => initializationCompletion.Task;
 
+	internal MacOSAccessibilityDisplayOptions AccessibilityDisplayOptions => accessibilityDisplayOptions;
+
 	internal bool IsInitialized => initializationCompletion.Task.IsCompleted;
 
 	internal WorkspaceState CaptureWorkspaceState() => ViewModel.CaptureWorkspaceState();
@@ -358,6 +361,22 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			CountNamedAutomationElements(PrimaryPaneBorder, realizedItemNames) > 0;
 		bool keyboardFocusNavigation = KeyboardAccelerators.Count(accelerator =>
 			accelerator.Key is Windows.System.VirtualKey.F6) == 2 && CycleFocus(reverse: false);
+		MacOSAccessibilityDisplayOptions nativeAccessibilityOptions = MacOSAccessibilityDisplayService.GetCurrentOptions();
+		MacOSAccessibilityDisplayOptions originalAccessibilityOptions = accessibilityDisplayOptions;
+		ApplyAccessibilityDisplayOptions(
+			MacOSAccessibilityDisplayOptions.IncreaseContrast |
+			MacOSAccessibilityDisplayOptions.ReduceTransparency |
+			MacOSAccessibilityDisplayOptions.ReduceMotion);
+		bool accessibilityDisplay = AddressBarBorder.BorderThickness.Left == 2 &&
+			CommandToolbarBorder.BorderThickness.Left == 2 &&
+			PrimaryEmptyFolderIcon.Opacity > 0.5 &&
+			SidebarDividerLine.Width == 2 && SplitDividerLine.Width == 2 &&
+			TitleBarBackground.Opacity == 1 &&
+			((App)Application.Current).AccessibilityDisplayOptions == nativeAccessibilityOptions;
+		ApplyAccessibilityDisplayOptions(originalAccessibilityOptions);
+		double restoredBorderWidth = originalAccessibilityOptions.HasFlag(MacOSAccessibilityDisplayOptions.IncreaseContrast) ? 2 : 1;
+		accessibilityDisplay &= AddressBarBorder.BorderThickness.Left == restoredBorderWidth &&
+			accessibilityDisplayOptions == originalAccessibilityOptions;
 		Button[] sidebarFooterButtons = [OpenFolderButton, ConnectServerButton, ClearRecentButton, SettingsButton];
 		bool sidebarFooterIcons = sidebarFooterButtons.All(static button =>
 			button.Content is CommandLabel { IconData: not null, Content.Length: > 0 });
@@ -520,7 +539,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			$"breadcrumbs={BreadcrumbPanel.Children.OfType<Button>().Count()} sidebar_sections={ViewModel.Locations.Count(static location => location.IsHeader)} " +
 			$"sidebar_roundtrip={sidebarRoundtrip} sidebar_resize={sidebarResizeRoundtrip} keyboard_resize={keyboardResize} sidebar_active={sidebarActiveSync} sidebar_sections_toggle={sidebarSectionRoundtrip} sidebar_labels={sidebarLabels} sidebar_rendered_labels={renderedSidebarLabels} sidebar_icons={sidebarIcons} sidebar_rendered_icons={renderedSidebarIcons} locale={System.Globalization.CultureInfo.CurrentUICulture.Name} language_override={Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride} home_label={GetResource("SidebarHomeButton/Content")} address_roundtrip={addressRoundtrip} preview_roundtrip={previewRoundtrip} " +
 			$"toolbar_breakpoints={toolbarBreakpoints} toolbar_icons={toolbarIcons} navigation_icons={navigationIcons} sidebar_footer_icons={sidebarFooterIcons} empty_state_icons={emptyStateIcons} item_fallback_icons={itemFallbackIcons} unified_titlebar={unifiedTitleBar} titlebar_layout={titleBarLayout} empty_folder={browser.IsEmptyFolder} no_results={browser.HasNoSearchResults} " +
-			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} accessibility_labels={accessibilityLabels} accessible_items={accessibleFileItems} focus_cycle={keyboardFocusNavigation} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
+			$"sort_headers={sortHeaderRoundtrip} view_switch={viewModeRoundtrip} accessibility_labels={accessibilityLabels} accessible_items={accessibleFileItems} focus_cycle={keyboardFocusNavigation} accessibility_display={accessibilityDisplay} native_accessibility={(int)nativeAccessibilityOptions} native_menu={nativeMenuInstalled} native_menu_routing={nativeMenuRouting} window_session_restore={windowSessionRestore} window_placement_restore={windowPlacementRestore} restored_windows={initialWindowCount} multi_window={multiWindowRoundtrip} tab_window_transfer={tabWindowTransfer} tab_switching={tabSwitching} tab_chrome={tabChrome} multi_window_settings_merge={multiWindowSettingsMerge} command_accelerators={commandAccelerators} permanent_delete={permanentDeleteRoundtrip} metadata_edit={metadataEditRoundtrip} security_properties={securityPropertiesRoundtrip} open_with={openWithRoundtrip} recent_locations={recentLocationsRoundtrip} duplicate={duplicateRoundtrip} new_tab={newTabRoundtrip} tab_labels={tabLabelsRoundtrip} tab_history={tabHistoryRoundtrip} tab_management={tabManagementRoundtrip} symbolic_link={symbolicLinkRoundtrip} " +
 			$"working_set_mb={process.WorkingSet64 / 1024d / 1024:F1} " +
 			$"managed_mb={GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024:F1}");
 
@@ -3903,6 +3922,35 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	internal void ApplyAccessibilityDisplayOptions(MacOSAccessibilityDisplayOptions options)
+	{
+		accessibilityDisplayOptions = options;
+		bool increaseContrast = options.HasFlag(MacOSAccessibilityDisplayOptions.IncreaseContrast);
+		double borderWidth = increaseContrast ? 2 : 1;
+		AddressBarBorder.BorderThickness = new Thickness(borderWidth);
+		CommandToolbarBorder.BorderThickness = new Thickness(borderWidth);
+		PreviewPaneBorder.BorderThickness = new Thickness(borderWidth);
+		SidebarBorder.BorderThickness = new Thickness(0, borderWidth, borderWidth, 0);
+		SidebarDividerLine.Width = borderWidth;
+		SplitDividerLine.Width = borderWidth;
+		PrimaryEmptyFolderIcon.Opacity = increaseContrast ? 0.52 : 0.32;
+		SecondaryEmptyFolderIcon.Opacity = increaseContrast ? 0.52 : 0.32;
+		PrimaryNoResultsIcon.Opacity = increaseContrast ? 0.52 : 0.32;
+		SecondaryNoResultsIcon.Opacity = increaseContrast ? 0.52 : 0.32;
+
+		if (options.HasFlag(MacOSAccessibilityDisplayOptions.ReduceTransparency))
+		{
+			TitleBarBackground.Opacity = 1;
+			SidebarBorder.Opacity = 1;
+			CommandToolbarBorder.Opacity = 1;
+			PrimaryPaneBorder.Opacity = 1;
+			SecondaryPaneBorder.Opacity = 1;
+			PreviewPaneBorder.Opacity = 1;
+		}
+
+		UpdatePaneVisuals();
+	}
+
 	private async void PropertiesButton_Click(object sender, RoutedEventArgs e)
 	{
 		if (Browser is not DirectoryBrowserViewModel targetBrowser || selectedItems.Count is 0 || fileTransferCancellation is not null)
@@ -4687,10 +4735,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private void UpdatePaneVisuals()
 	{
 		bool secondaryIsActive = ReferenceEquals(Browser, ViewModel.ActiveTab?.SecondaryBrowser);
+		bool increaseContrast = accessibilityDisplayOptions.HasFlag(MacOSAccessibilityDisplayOptions.IncreaseContrast);
+		double inactiveBorderWidth = increaseContrast ? 2 : 1;
+		double activeBorderWidth = increaseContrast ? 3 : 2;
 		Brush defaultBorder = (Brush)Application.Current.Resources["FilesCardBorderBrush"];
 		Brush activeBorder = (Brush)Application.Current.Resources["FilesAccentBrush"];
-		PrimaryPaneBorder.BorderThickness = new Thickness(secondaryIsActive ? 1 : 2);
-		SecondaryPaneBorder.BorderThickness = new Thickness(secondaryIsActive ? 2 : 1);
+		PrimaryPaneBorder.BorderThickness = new Thickness(secondaryIsActive ? inactiveBorderWidth : activeBorderWidth);
+		SecondaryPaneBorder.BorderThickness = new Thickness(secondaryIsActive ? activeBorderWidth : inactiveBorderWidth);
 		PrimaryPaneBorder.BorderBrush = secondaryIsActive ? defaultBorder : activeBorder;
 		SecondaryPaneBorder.BorderBrush = secondaryIsActive ? activeBorder : defaultBorder;
 		if (SplitViewButton.Content is CommandLabel splitViewLabel)

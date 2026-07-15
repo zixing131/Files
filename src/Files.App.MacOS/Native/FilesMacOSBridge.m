@@ -255,6 +255,28 @@ static NSWindow *files_window_with_identifier(NSString *identifier)
 	return nil;
 }
 
+__attribute__((visibility("default"))) int files_macos_get_accessibility_display_options(void)
+{
+	@autoreleasepool
+	{
+		NSWorkspace *workspace = NSWorkspace.sharedWorkspace;
+		int options = 0;
+		if (workspace.accessibilityDisplayShouldIncreaseContrast)
+		{
+			options |= 1;
+		}
+		if (workspace.accessibilityDisplayShouldReduceTransparency)
+		{
+			options |= 2;
+		}
+		if (workspace.accessibilityDisplayShouldReduceMotion)
+		{
+			options |= 4;
+		}
+		return options;
+	}
+}
+
 __attribute__((visibility("default"))) int files_macos_register_window(void *windowHandle, const char *identifier)
 {
 	if (windowHandle == NULL || identifier == NULL)
@@ -273,10 +295,16 @@ __attribute__((visibility("default"))) int files_macos_register_window(void *win
 		NSWindow *window = targetWindow;
 		if ([window isKindOfClass:NSWindow.class])
 		{
+			NSWorkspace *workspace = NSWorkspace.sharedWorkspace;
 			window.identifier = value;
 			window.titleVisibility = NSWindowTitleHidden;
-			window.titlebarAppearsTransparent = YES;
-			window.titlebarSeparatorStyle = NSTitlebarSeparatorStyleNone;
+			window.titlebarAppearsTransparent = !workspace.accessibilityDisplayShouldReduceTransparency;
+			window.titlebarSeparatorStyle = workspace.accessibilityDisplayShouldIncreaseContrast
+				? NSTitlebarSeparatorStyleAutomatic
+				: NSTitlebarSeparatorStyleNone;
+			window.animationBehavior = workspace.accessibilityDisplayShouldReduceMotion
+				? NSWindowAnimationBehaviorNone
+				: NSWindowAnimationBehaviorDefault;
 			window.styleMask |= NSWindowStyleMaskFullSizeContentView;
 			window.tabbingMode = NSWindowTabbingModeDisallowed;
 			if (windowObserver == nil)
