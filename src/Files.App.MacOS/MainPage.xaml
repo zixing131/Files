@@ -131,7 +131,7 @@
 								<TextBlock Grid.Column="1" MaxWidth="180" HorizontalAlignment="Left" Text="{x:Bind Header, Mode=OneWay}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
 								<Grid Grid.Column="2" Width="24" Height="24" Margin="4,0,2,0" HorizontalAlignment="Right">
 									<Button Width="24" Height="24" Padding="0" Click="TabHeaderCloseButton_Click" Loaded="TabHeaderCloseButton_Loaded" Style="{StaticResource FilesFlatButtonStyle}" Tag="{Binding}" Visibility="{Binding ShowCloseButton, Converter={StaticResource BooleanToVisibilityConverter}}">
-										<PathIcon Width="12" Height="12" Data="M3.15,2.44 L8,7.29 L12.85,2.44 L13.56,3.15 L8.71,8 L13.56,12.85 L12.85,13.56 L8,8.71 L3.15,13.56 L2.44,12.85 L7.29,8 L2.44,3.15 Z" />
+										<Path Width="12" Height="12" Data="M2,2 L10,10 M10,2 L2,10" Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.35" />
 									</Button>
 								</Grid>
 							</Grid>
