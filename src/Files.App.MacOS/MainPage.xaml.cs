@@ -5326,16 +5326,16 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private static void ResetItemsScrollPosition(FrameworkElement control)
 	{
-		if (control is ItemsView { ScrollView: ScrollView scrollView })
+		if (control is ItemsView itemsView && (itemsView.ScrollView ?? FindVisualDescendant<ScrollView>(itemsView)) is ScrollView scrollView)
 		{
 			scrollView.ScrollTo(
-				scrollView.HorizontalOffset,
+				0,
 				0,
 				new ScrollingScrollOptions(ScrollingAnimationMode.Disabled, ScrollingSnapPointsMode.Ignore));
 		}
 		else if (FindVisualDescendant<ScrollViewer>(control) is ScrollViewer scrollViewer)
 		{
-			scrollViewer.ChangeView(null, 0, null, disableAnimation: true);
+			scrollViewer.ChangeView(0, 0, null, disableAnimation: true);
 		}
 	}
 
@@ -5496,6 +5496,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		FrameworkElement targetControl = GetVisibleItemsControl(browser);
 		RestoreSelection(browser, targetControl, selection);
 		ActivateBrowser(browser, targetControl);
+		ResetItemsScrollPosition(targetControl);
+		DispatcherQueue.TryEnqueue(() =>
+		{
+			FrameworkElement visibleControl = GetVisibleItemsControl(browser);
+			visibleControl.UpdateLayout();
+			ResetItemsScrollPosition(visibleControl);
+		});
 	}
 
 	private async void SplitViewButton_Click(object sender, RoutedEventArgs e)
