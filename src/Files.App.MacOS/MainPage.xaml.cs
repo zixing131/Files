@@ -41,6 +41,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private CancellationTokenSource? accessibilityAnnouncementCancellation;
 	private readonly Stack<FileOperationHistoryEntry> undoHistory = new();
 	private readonly Stack<FileOperationHistoryEntry> redoHistory = new();
+	private readonly Dictionary<DirectoryBrowserViewModel, string> lastScrollPaths = [];
 	private AppSettings currentSettings = new();
 	private AppSettings persistedSettingsBaseline = new();
 	private bool isResizingSplit;
@@ -5917,12 +5918,25 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void ViewModel_WorkspaceChanged(object? sender, EventArgs e)
 	{
+		ResetScrollForPathChange();
 		RecordRecentLocation();
 		UpdateAddressBar();
 		UpdateSidebarSelection();
 		UpdateSortHeaderVisuals();
 		UpdateViewModeVisuals();
 		ScheduleWorkspaceSave();
+	}
+
+	private void ResetScrollForPathChange()
+	{
+		if (ViewModel.ActiveBrowser is not DirectoryBrowserViewModel browser ||
+			lastScrollPaths.TryGetValue(browser, out string? previousPath) && string.Equals(previousPath, browser.CurrentPath, StringComparison.Ordinal))
+		{
+			return;
+		}
+
+		lastScrollPaths[browser] = browser.CurrentPath;
+		DispatcherQueue.TryEnqueue(() => ResetItemsScrollPosition(GetVisibleItemsControl(browser)));
 	}
 
 	private void RecordRecentLocation()
