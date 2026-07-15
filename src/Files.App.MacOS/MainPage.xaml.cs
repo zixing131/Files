@@ -5934,9 +5934,12 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			return;
 		}
+		if ((currentSettings.RecentPaths ?? []).Contains(path, StringComparer.Ordinal))
+		{
+			return;
+		}
 
 		string[] recentPaths = (currentSettings.RecentPaths ?? [])
-			.Where(existing => !string.Equals(existing, path, StringComparison.Ordinal))
 			.Prepend(path)
 			.Take(8)
 			.ToArray();
