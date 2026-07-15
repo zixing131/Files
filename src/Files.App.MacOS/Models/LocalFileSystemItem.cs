@@ -32,7 +32,10 @@ public sealed partial class LocalFileSystemItem(
 	public DateTimeOffset Modified { get; } = modified;
 
 	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(HasThumbnail))]
 	public partial ImageSource? Thumbnail { get; set; }
+
+	public bool HasThumbnail => Thumbnail is not null;
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor(nameof(IsSearchResult))]
