@@ -40,21 +40,6 @@
 		</MenuFlyout>
 	</Page.Resources>
 	<Page.KeyboardAccelerators>
-		<KeyboardAccelerator Key="C" Modifiers="Control" Invoked="CopyAccelerator_Invoked" />
-		<KeyboardAccelerator Key="X" Modifiers="Control" Invoked="CutAccelerator_Invoked" />
-		<KeyboardAccelerator Key="V" Modifiers="Control" Invoked="PasteAccelerator_Invoked" />
-		<KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchAccelerator_Invoked" />
-		<KeyboardAccelerator Key="L" Modifiers="Control" Invoked="AddressAccelerator_Invoked" />
-		<KeyboardAccelerator Key="A" Modifiers="Control" Invoked="SelectAllAccelerator_Invoked" />
-		<KeyboardAccelerator Key="I" Modifiers="Control,Shift" Invoked="InvertSelectionAccelerator_Invoked" />
-		<KeyboardAccelerator Key="C" Modifiers="Control,Shift" Invoked="CopyPathAccelerator_Invoked" />
-		<KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="UndoAccelerator_Invoked" />
-		<KeyboardAccelerator Key="Z" Modifiers="Control,Shift" Invoked="RedoAccelerator_Invoked" />
-		<KeyboardAccelerator Key="D" Modifiers="Control,Shift" Invoked="SplitViewAccelerator_Invoked" />
-		<KeyboardAccelerator Key="Delete" Modifiers="Shift" Invoked="PermanentDeleteAccelerator_Invoked" />
-		<KeyboardAccelerator Key="Enter" Modifiers="Control" Invoked="OpenInNewTabAccelerator_Invoked" />
-		<KeyboardAccelerator Key="T" Modifiers="Control,Shift" Invoked="ReopenClosedTabAccelerator_Invoked" />
-		<KeyboardAccelerator Key="K" Modifiers="Control,Shift" Invoked="DuplicateTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Tab" Modifiers="Control" Invoked="NextTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Tab" Modifiers="Control,Shift" Invoked="PreviousTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Number1" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
@@ -66,6 +51,7 @@
 		<KeyboardAccelerator Key="Number7" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Number8" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Number9" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Delete" Modifiers="Shift" Invoked="PermanentDeleteAccelerator_Invoked" />
 		<KeyboardAccelerator Key="F6" Invoked="CycleFocusAccelerator_Invoked" />
 		<KeyboardAccelerator Key="F6" Modifiers="Shift" Invoked="CycleFocusAccelerator_Invoked" />
 		<!--  Uno maps the macOS Command key to the WinUI Windows modifier.  -->
