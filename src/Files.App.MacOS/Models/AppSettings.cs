@@ -47,7 +47,8 @@ public sealed record AppSettings(
 	bool ReverseTabScrollDirection = false,
 	string[]? HiddenDefaultSidebarLocations = null,
 	TerminalPreference Terminal = TerminalPreference.Terminal,
-	int SchemaVersion = 13);
+	bool ConfirmMoveToTrash = true,
+	int SchemaVersion = 14);
 
 public sealed record FolderAccessGrant(string Path, string Bookmark);
 

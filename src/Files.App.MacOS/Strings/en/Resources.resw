@@ -228,9 +228,18 @@
   <data name="SortModifiedItem.Text" xml:space="preserve">
     <value>Date modified</value>
   </data>
+  <data name="SortCreatedItem.Text" xml:space="preserve"><value>Date created</value></data>
+  <data name="SortLastOpenedItem.Text" xml:space="preserve"><value>Date last opened</value></data>
+  <data name="SortAddedItem.Text" xml:space="preserve"><value>Date added</value></data>
   <data name="SortSizeItem.Text" xml:space="preserve">
     <value>Size</value>
   </data>
+  <data name="SortKindItem.Text" xml:space="preserve"><value>Kind</value></data>
+  <data name="SortLastModifiedByItem.Text" xml:space="preserve"><value>Last modified by</value></data>
+  <data name="SortSharedByItem.Text" xml:space="preserve"><value>Shared by</value></data>
+  <data name="SortVersionItem.Text" xml:space="preserve"><value>Version</value></data>
+  <data name="SortCommentsItem.Text" xml:space="preserve"><value>Comments</value></data>
+  <data name="SortTagsItem.Text" xml:space="preserve"><value>Tags</value></data>
   <data name="SortAscendingItem.Text" xml:space="preserve">
     <value>Ascending</value>
   </data>
@@ -364,6 +373,7 @@
   <data name="DefaultGridViewSetting" xml:space="preserve">
     <value>Use grid view for new tabs</value>
   </data>
+  <data name="ConfirmMoveToTrashSetting" xml:space="preserve"><value>Confirm before moving items to Trash</value></data>
   <data name="SaveButtonText" xml:space="preserve">
     <value>Save</value>
   </data>

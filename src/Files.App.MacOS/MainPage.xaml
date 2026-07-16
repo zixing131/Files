@@ -55,6 +55,8 @@
 		<KeyboardAccelerator Key="Number7" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Number8" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Number9" Modifiers="Control" Invoked="SelectNumberedTabAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Back" Invoked="MoveToTrashAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Delete" Invoked="MoveToTrashAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Delete" Modifiers="Shift" Invoked="PermanentDeleteAccelerator_Invoked" />
 		<KeyboardAccelerator Key="F6" Invoked="CycleFocusAccelerator_Invoked" />
 		<KeyboardAccelerator Key="F6" Modifiers="Shift" Invoked="CycleFocusAccelerator_Invoked" />
@@ -481,7 +483,16 @@
 									<MenuFlyout Opening="SortFlyout_Opening">
 										<ToggleMenuFlyoutItem x:Name="SortNameItem" x:Uid="SortNameItem" Click="SortFieldMenuItem_Click" IsChecked="True" Tag="Name" />
 										<ToggleMenuFlyoutItem x:Name="SortModifiedItem" x:Uid="SortModifiedItem" Click="SortFieldMenuItem_Click" Tag="Modified" />
+										<ToggleMenuFlyoutItem x:Name="SortCreatedItem" x:Uid="SortCreatedItem" Click="SortFieldMenuItem_Click" Tag="Created" />
+										<ToggleMenuFlyoutItem x:Name="SortLastOpenedItem" x:Uid="SortLastOpenedItem" Click="SortFieldMenuItem_Click" Tag="LastOpened" />
+										<ToggleMenuFlyoutItem x:Name="SortAddedItem" x:Uid="SortAddedItem" Click="SortFieldMenuItem_Click" Tag="Added" />
 										<ToggleMenuFlyoutItem x:Name="SortSizeItem" x:Uid="SortSizeItem" Click="SortFieldMenuItem_Click" Tag="Size" />
+										<ToggleMenuFlyoutItem x:Name="SortKindItem" x:Uid="SortKindItem" Click="SortFieldMenuItem_Click" Tag="Kind" />
+										<ToggleMenuFlyoutItem x:Uid="SortLastModifiedByItem" IsEnabled="False" />
+										<ToggleMenuFlyoutItem x:Uid="SortSharedByItem" IsEnabled="False" />
+										<ToggleMenuFlyoutItem x:Name="SortVersionItem" x:Uid="SortVersionItem" Click="SortFieldMenuItem_Click" Tag="Version" />
+										<ToggleMenuFlyoutItem x:Name="SortCommentsItem" x:Uid="SortCommentsItem" Click="SortFieldMenuItem_Click" Tag="Comments" />
+										<ToggleMenuFlyoutItem x:Name="SortTagsItem" x:Uid="SortTagsItem" Click="SortFieldMenuItem_Click" Tag="Tags" />
 										<MenuFlyoutSeparator />
 										<ToggleMenuFlyoutItem x:Name="SortAscendingItem" x:Uid="SortAscendingItem" Click="SortDirectionMenuItem_Click" IsChecked="True" Tag="Ascending" />
 										<ToggleMenuFlyoutItem x:Name="SortDescendingItem" x:Uid="SortDescendingItem" Click="SortDirectionMenuItem_Click" Tag="Descending" />
@@ -532,7 +543,16 @@
 							<MenuFlyoutSubItem Tag="Sort">
 								<ToggleMenuFlyoutItem x:Uid="SortNameItem" Click="SortFieldMenuItem_Click" Tag="Name" />
 								<ToggleMenuFlyoutItem x:Uid="SortModifiedItem" Click="SortFieldMenuItem_Click" Tag="Modified" />
+								<ToggleMenuFlyoutItem x:Uid="SortCreatedItem" Click="SortFieldMenuItem_Click" Tag="Created" />
+								<ToggleMenuFlyoutItem x:Uid="SortLastOpenedItem" Click="SortFieldMenuItem_Click" Tag="LastOpened" />
+								<ToggleMenuFlyoutItem x:Uid="SortAddedItem" Click="SortFieldMenuItem_Click" Tag="Added" />
 								<ToggleMenuFlyoutItem x:Uid="SortSizeItem" Click="SortFieldMenuItem_Click" Tag="Size" />
+								<ToggleMenuFlyoutItem x:Uid="SortKindItem" Click="SortFieldMenuItem_Click" Tag="Kind" />
+								<ToggleMenuFlyoutItem x:Uid="SortLastModifiedByItem" IsEnabled="False" />
+								<ToggleMenuFlyoutItem x:Uid="SortSharedByItem" IsEnabled="False" />
+								<ToggleMenuFlyoutItem x:Uid="SortVersionItem" Click="SortFieldMenuItem_Click" Tag="Version" />
+								<ToggleMenuFlyoutItem x:Uid="SortCommentsItem" Click="SortFieldMenuItem_Click" Tag="Comments" />
+								<ToggleMenuFlyoutItem x:Uid="SortTagsItem" Click="SortFieldMenuItem_Click" Tag="Tags" />
 								<MenuFlyoutSeparator />
 								<ToggleMenuFlyoutItem x:Uid="SortAscendingItem" Click="SortDirectionMenuItem_Click" Tag="Ascending" />
 								<ToggleMenuFlyoutItem x:Uid="SortDescendingItem" Click="SortDirectionMenuItem_Click" Tag="Descending" />
@@ -598,13 +618,13 @@
 								BorderThickness="0,0,0,1">
 								<Grid Padding="8,0" ColumnDefinitions="28,*,180,100">
 									<Button x:Name="PrimaryNameHeaderButton" Grid.Column="1" Click="DetailsHeaderButton_Click" Style="{StaticResource DetailsHeaderButtonStyle}" Tag="Name">
-										<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="NameColumn" /><PathIcon x:Name="PrimaryNameSortIndicator" Width="10" Height="10" Visibility="Collapsed" /></StackPanel>
+										<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="NameColumn" /><PathIcon x:Name="PrimaryNameSortIndicator" Width="12" Height="12" Visibility="Collapsed" /></StackPanel>
 									</Button>
 									<Button x:Name="PrimaryModifiedHeaderButton" Grid.Column="2" Click="DetailsHeaderButton_Click" Style="{StaticResource DetailsHeaderButtonStyle}" Tag="Modified">
-										<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="ModifiedColumn" /><PathIcon x:Name="PrimaryModifiedSortIndicator" Width="10" Height="10" Visibility="Collapsed" /></StackPanel>
+										<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="ModifiedColumn" /><PathIcon x:Name="PrimaryModifiedSortIndicator" Width="12" Height="12" Visibility="Collapsed" /></StackPanel>
 									</Button>
 									<Button x:Name="PrimarySizeHeaderButton" Grid.Column="3" Click="DetailsHeaderButton_Click" Style="{StaticResource DetailsHeaderButtonStyle}" Tag="Size">
-										<StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="SizeColumn" /><PathIcon x:Name="PrimarySizeSortIndicator" Width="10" Height="10" Visibility="Collapsed" /></StackPanel>
+										<StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="SizeColumn" /><PathIcon x:Name="PrimarySizeSortIndicator" Width="12" Height="12" Visibility="Collapsed" /></StackPanel>
 									</Button>
 								</Grid>
 							</Border>
@@ -715,7 +735,16 @@
 								<MenuFlyoutSubItem Tag="Sort">
 									<ToggleMenuFlyoutItem x:Uid="SortNameItem" Click="SortFieldMenuItem_Click" Tag="Name" />
 									<ToggleMenuFlyoutItem x:Uid="SortModifiedItem" Click="SortFieldMenuItem_Click" Tag="Modified" />
+									<ToggleMenuFlyoutItem x:Uid="SortCreatedItem" Click="SortFieldMenuItem_Click" Tag="Created" />
+									<ToggleMenuFlyoutItem x:Uid="SortLastOpenedItem" Click="SortFieldMenuItem_Click" Tag="LastOpened" />
+									<ToggleMenuFlyoutItem x:Uid="SortAddedItem" Click="SortFieldMenuItem_Click" Tag="Added" />
 									<ToggleMenuFlyoutItem x:Uid="SortSizeItem" Click="SortFieldMenuItem_Click" Tag="Size" />
+									<ToggleMenuFlyoutItem x:Uid="SortKindItem" Click="SortFieldMenuItem_Click" Tag="Kind" />
+									<ToggleMenuFlyoutItem x:Uid="SortLastModifiedByItem" IsEnabled="False" />
+									<ToggleMenuFlyoutItem x:Uid="SortSharedByItem" IsEnabled="False" />
+									<ToggleMenuFlyoutItem x:Uid="SortVersionItem" Click="SortFieldMenuItem_Click" Tag="Version" />
+									<ToggleMenuFlyoutItem x:Uid="SortCommentsItem" Click="SortFieldMenuItem_Click" Tag="Comments" />
+									<ToggleMenuFlyoutItem x:Uid="SortTagsItem" Click="SortFieldMenuItem_Click" Tag="Tags" />
 									<MenuFlyoutSeparator />
 									<ToggleMenuFlyoutItem x:Uid="SortAscendingItem" Click="SortDirectionMenuItem_Click" Tag="Ascending" />
 									<ToggleMenuFlyoutItem x:Uid="SortDescendingItem" Click="SortDirectionMenuItem_Click" Tag="Descending" />
@@ -773,13 +802,13 @@
 									BorderThickness="0,0,0,1">
 									<Grid Padding="8,0" ColumnDefinitions="28,*,140,90">
 										<Button x:Name="SecondaryNameHeaderButton" Grid.Column="1" Click="DetailsHeaderButton_Click" Style="{StaticResource DetailsHeaderButtonStyle}" Tag="Name">
-											<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="NameColumn" /><PathIcon x:Name="SecondaryNameSortIndicator" Width="10" Height="10" Visibility="Collapsed" /></StackPanel>
+											<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="NameColumn" /><PathIcon x:Name="SecondaryNameSortIndicator" Width="12" Height="12" Visibility="Collapsed" /></StackPanel>
 										</Button>
 										<Button x:Name="SecondaryModifiedHeaderButton" Grid.Column="2" Click="DetailsHeaderButton_Click" Style="{StaticResource DetailsHeaderButtonStyle}" Tag="Modified">
-											<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="ModifiedColumn" /><PathIcon x:Name="SecondaryModifiedSortIndicator" Width="10" Height="10" Visibility="Collapsed" /></StackPanel>
+											<StackPanel Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="ModifiedColumn" /><PathIcon x:Name="SecondaryModifiedSortIndicator" Width="12" Height="12" Visibility="Collapsed" /></StackPanel>
 										</Button>
 										<Button x:Name="SecondarySizeHeaderButton" Grid.Column="3" Click="DetailsHeaderButton_Click" Style="{StaticResource DetailsHeaderButtonStyle}" Tag="Size">
-											<StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="SizeColumn" /><PathIcon x:Name="SecondarySizeSortIndicator" Width="10" Height="10" Visibility="Collapsed" /></StackPanel>
+											<StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6"><TextBlock x:Uid="SizeColumn" /><PathIcon x:Name="SecondarySizeSortIndicator" Width="12" Height="12" Visibility="Collapsed" /></StackPanel>
 										</Button>
 									</Grid>
 								</Border>

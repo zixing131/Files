@@ -137,6 +137,9 @@ internal static partial class MacOSNativeMethods
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_get_finder_tags", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial nint GetFinderTags(string path);
 
+	[LibraryImport(LibraryName, EntryPoint = "files_macos_get_file_sort_metadata", StringMarshalling = StringMarshalling.Utf8)]
+	internal static partial nint GetFileSortMetadata(string path);
+
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_set_finder_tags", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial nint SetFinderTags(string path, string tagsJson);
 

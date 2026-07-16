@@ -130,8 +130,9 @@ public sealed class SpotlightFileSearchService(IFileSearchService? fallback = nu
 				bool isDirectory = attributes.HasFlag(System.IO.FileAttributes.Directory);
 				FileSystemInfo info = isDirectory ? new DirectoryInfo(fullPath) : new FileInfo(fullPath);
 				bool isPackage = isDirectory && MacOSFilePackage.IsPackage(info);
+				MacOSFinderTagService.SortMetadata sortMetadata = MacOSFinderTagService.GetSortMetadata(fullPath);
 				IReadOnlyList<string>? finderTags = query.RequiresFinderTags
-					? MacOSFinderTagService.GetTags(fullPath)
+					? sortMetadata.Tags
 					: null;
 				if (!query.MatchesMetadata(info, isDirectory && !isPackage, finderTags))
 				{
@@ -151,7 +152,14 @@ public sealed class SpotlightFileSearchService(IFileSearchService? fallback = nu
 					isHidden,
 					info is FileInfo fileInfo ? fileInfo.Length : null,
 					info.LastWriteTimeUtc,
-					isPackage));
+					isPackage,
+					info.CreationTimeUtc,
+					sortMetadata.LastOpened ?? info.LastAccessTimeUtc,
+					sortMetadata.Added ?? info.CreationTimeUtc,
+					sortMetadata.Tags,
+					sortMetadata.Version,
+					sortMetadata.Comments,
+					sortMetadata.Kind));
 			}
 			catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 			{

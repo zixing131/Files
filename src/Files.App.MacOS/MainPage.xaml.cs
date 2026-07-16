@@ -1010,7 +1010,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			AppSettings restoredSettings = await diagnosticSettingsService.LoadAsync();
 			recentLocations &= restoredSettings is
 			{
-				SchemaVersion: 13,
+				SchemaVersion: 14,
 				RecentPaths: [var restoredRecentPath],
 				CollapsedSidebarSections: ["Recent"],
 				AdditionalWindowWorkspaces: [{ Tabs: [{ SplitRatio: 0.8 }] }],
@@ -1018,6 +1018,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				WindowPlacement: null,
 				AdditionalWindowPlacements: [{ Width: 800, Height: 600 }],
 				ReverseTabScrollDirection: true,
+				ConfirmMoveToTrash: true,
 			} && restoredRecentPath == root;
 			string originalGrantPath = Path.Combine(root, "old-grant");
 			string restoredGrantPath = Path.Combine(root, "restored-grant");
@@ -3540,7 +3541,14 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				{
 					"Name" => browser.SortField is FileSortField.Name,
 					"Modified" => browser.SortField is FileSortField.Modified,
+					"Created" => browser.SortField is FileSortField.Created,
+					"LastOpened" => browser.SortField is FileSortField.LastOpened,
+					"Added" => browser.SortField is FileSortField.Added,
 					"Size" => browser.SortField is FileSortField.Size,
+					"Kind" => browser.SortField is FileSortField.Kind,
+					"Version" => browser.SortField is FileSortField.Version,
+					"Comments" => browser.SortField is FileSortField.Comments,
+					"Tags" => browser.SortField is FileSortField.Tags,
 					"Ascending" => browser.SortDirection is FileSortDirection.Ascending,
 					"Descending" => browser.SortDirection is FileSortDirection.Descending,
 					"Grid" => browser.IsGridView,
@@ -4506,19 +4514,22 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
-		var dialog = new ContentDialog
+		if (currentSettings.ConfirmMoveToTrash)
 		{
-			Title = GetResource("MoveToTrashDialogTitle"),
-			Content = string.Format(GetResource("MoveToTrashDialogMessageFormat"), selectedItems.Count),
-			PrimaryButtonText = GetResource("MoveToTrashButtonText"),
-			CloseButtonText = GetResource("CancelButtonText"),
-			DefaultButton = ContentDialogButton.Close,
-			XamlRoot = XamlRoot,
-		};
+			var dialog = new ContentDialog
+			{
+				Title = GetResource("MoveToTrashDialogTitle"),
+				Content = string.Format(GetResource("MoveToTrashDialogMessageFormat"), selectedItems.Count),
+				PrimaryButtonText = GetResource("MoveToTrashButtonText"),
+				CloseButtonText = GetResource("CancelButtonText"),
+				DefaultButton = ContentDialogButton.Close,
+				XamlRoot = XamlRoot,
+			};
 
-		if (await dialog.ShowAsync() is not ContentDialogResult.Primary)
-		{
-			return;
+			if (await dialog.ShowAsync() is not ContentDialogResult.Primary)
+			{
+				return;
+			}
 		}
 
 		try
@@ -4542,9 +4553,18 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private void MoveToTrashAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (!IsTextInputFocused() && selectedItems.Count > 0 && fileTransferCancellation is null)
+		{
+			args.Handled = true;
+			DeleteButton_Click(DeleteButton, new RoutedEventArgs());
+		}
+	}
+
 	private async void PermanentDeleteAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
 	{
-		if (selectedItems.Count > 0 && fileTransferCancellation is null)
+		if (!IsTextInputFocused() && selectedItems.Count > 0 && fileTransferCancellation is null)
 		{
 			args.Handled = true;
 			await DeletePermanentlyAsync();
@@ -4715,6 +4735,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			OnContent = GetResource("ToggleOnText"),
 			OffContent = GetResource("ToggleOffText"),
 		};
+		var confirmMoveToTrashToggle = new ToggleSwitch
+		{
+			Header = GetResource("ConfirmMoveToTrashSetting"),
+			IsOn = currentSettings.ConfirmMoveToTrash,
+			OnContent = GetResource("ToggleOnText"),
+			OffContent = GetResource("ToggleOffText"),
+		};
 		var content = new StackPanel
 		{
 			Spacing = 16,
@@ -4729,6 +4756,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		content.Children.Add(showHiddenToggle);
 		content.Children.Add(defaultGridToggle);
 		content.Children.Add(reverseTabScrollToggle);
+		content.Children.Add(confirmMoveToTrashToggle);
 		SidebarLocationOption[] defaultSidebarLocations = ViewModel.GetDefaultSidebarLocations();
 		var hiddenSidebarLocations = (currentSettings.HiddenDefaultSidebarLocations ?? []).ToHashSet(StringComparer.Ordinal);
 		CheckBox[] defaultLocationToggles = defaultSidebarLocations.Select(location => new CheckBox
@@ -4855,6 +4883,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			ShowHiddenFiles = showHiddenToggle.IsOn,
 			UseGridViewForNewTabs = defaultGridToggle.IsOn,
 			ReverseTabScrollDirection = reverseTabScrollToggle.IsOn,
+			ConfirmMoveToTrash = confirmMoveToTrashToggle.IsOn,
 			HiddenDefaultSidebarLocations = defaultLocationToggles
 				.Where(static toggle => toggle.IsChecked is not true)
 				.Select(static toggle => (string)toggle.Tag)
@@ -6007,9 +6036,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 
 		Browser.SetSort(field, Browser.SortDirection);
-		SortNameItem.IsChecked = field is FileSortField.Name;
-		SortModifiedItem.IsChecked = field is FileSortField.Modified;
-		SortSizeItem.IsChecked = field is FileSortField.Size;
+		UpdateSortFlyoutChecks(field);
 		AnnounceSortState(Browser);
 	}
 
@@ -6086,10 +6113,14 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
-		PathIcon activeIndicator = columns.First(column => column.Field == browser.SortField).Indicator;
+		PathIcon? activeIndicator = columns.FirstOrDefault(column => column.Field == browser.SortField).Indicator;
+		if (activeIndicator is null)
+		{
+			return;
+		}
 		string path = browser.SortDirection is FileSortDirection.Ascending
-			? "M10,2 L18,10 L16,12 L12,8 V18 H8 V8 L4,12 L2,10 Z"
-			: "M8,2 H12 V12 L16,8 L18,10 L10,18 L2,10 L4,8 L8,12 Z";
+			? "M1,8 L5,2 L9,8 Z"
+			: "M1,2 L5,8 L9,2 Z";
 		activeIndicator.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), path);
 		activeIndicator.Visibility = Visibility.Visible;
 	}
@@ -6097,7 +6128,14 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private static string GetSortFieldResource(FileSortField field) => field switch
 	{
 		FileSortField.Modified => "ModifiedColumn/Text",
+		FileSortField.Created => "SortCreatedItem/Text",
+		FileSortField.LastOpened => "SortLastOpenedItem/Text",
+		FileSortField.Added => "SortAddedItem/Text",
 		FileSortField.Size => "SizeColumn/Text",
+		FileSortField.Kind => "SortKindItem/Text",
+		FileSortField.Version => "SortVersionItem/Text",
+		FileSortField.Comments => "SortCommentsItem/Text",
+		FileSortField.Tags => "SortTagsItem/Text",
 		_ => "NameColumn/Text",
 	};
 
@@ -6125,11 +6163,23 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
-		SortNameItem.IsChecked = Browser.SortField is FileSortField.Name;
-		SortModifiedItem.IsChecked = Browser.SortField is FileSortField.Modified;
-		SortSizeItem.IsChecked = Browser.SortField is FileSortField.Size;
+		UpdateSortFlyoutChecks(Browser.SortField);
 		SortAscendingItem.IsChecked = Browser.SortDirection is FileSortDirection.Ascending;
 		SortDescendingItem.IsChecked = Browser.SortDirection is FileSortDirection.Descending;
+	}
+
+	private void UpdateSortFlyoutChecks(FileSortField field)
+	{
+		SortNameItem.IsChecked = field is FileSortField.Name;
+		SortModifiedItem.IsChecked = field is FileSortField.Modified;
+		SortCreatedItem.IsChecked = field is FileSortField.Created;
+		SortLastOpenedItem.IsChecked = field is FileSortField.LastOpened;
+		SortAddedItem.IsChecked = field is FileSortField.Added;
+		SortSizeItem.IsChecked = field is FileSortField.Size;
+		SortKindItem.IsChecked = field is FileSortField.Kind;
+		SortVersionItem.IsChecked = field is FileSortField.Version;
+		SortCommentsItem.IsChecked = field is FileSortField.Comments;
+		SortTagsItem.IsChecked = field is FileSortField.Tags;
 	}
 
 	private void SortDirectionMenuItem_Click(object sender, RoutedEventArgs e)
@@ -6276,7 +6326,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				WindowPlacement = windowSession.PrimaryWindowPlacement,
 				AdditionalWindowPlacements = windowSession.AdditionalWindowPlacements,
 				SidebarWidth = mergedSettings.SidebarWidth,
-				SchemaVersion = 13,
+				SchemaVersion = 14,
 			};
 			await SettingsService.SaveAsync(updatedSettings, cancellationToken);
 			currentSettings = updatedSettings;
@@ -6297,6 +6347,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			ShowHiddenFiles = requested.ShowHiddenFiles != baseline.ShowHiddenFiles ? requested.ShowHiddenFiles : latest.ShowHiddenFiles,
 			UseGridViewForNewTabs = requested.UseGridViewForNewTabs != baseline.UseGridViewForNewTabs ? requested.UseGridViewForNewTabs : latest.UseGridViewForNewTabs,
 			ReverseTabScrollDirection = requested.ReverseTabScrollDirection != baseline.ReverseTabScrollDirection ? requested.ReverseTabScrollDirection : latest.ReverseTabScrollDirection,
+			ConfirmMoveToTrash = requested.ConfirmMoveToTrash != baseline.ConfirmMoveToTrash ? requested.ConfirmMoveToTrash : latest.ConfirmMoveToTrash,
 			FavoritePaths = HasSequenceChanged(requested.FavoritePaths, baseline.FavoritePaths, StringComparer.OrdinalIgnoreCase) ? requested.FavoritePaths : latest.FavoritePaths,
 			RecentPaths = HasSequenceChanged(requested.RecentPaths, baseline.RecentPaths, StringComparer.Ordinal) ? requested.RecentPaths : latest.RecentPaths,
 			RecentServers = HasSequenceChanged(requested.RecentServers, baseline.RecentServers, StringComparer.OrdinalIgnoreCase) ? requested.RecentServers : latest.RecentServers,

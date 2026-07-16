@@ -1576,6 +1576,57 @@ __attribute__((visibility("default"))) char *files_macos_get_finder_tags(const c
 	}
 }
 
+__attribute__((visibility("default"))) char *files_macos_get_file_sort_metadata(const char *path)
+{
+	@autoreleasepool
+	{
+		NSURL *url = files_url_from_path(path);
+		if (url == nil)
+		{
+			return NULL;
+		}
+
+		NSDate *addedDate = nil;
+		NSDate *lastOpenedDate = nil;
+		NSString *kind = nil;
+		NSArray<NSString *> *tags = nil;
+		[url getResourceValue:&addedDate forKey:NSURLAddedToDirectoryDateKey error:nil];
+		[url getResourceValue:&lastOpenedDate forKey:NSURLContentAccessDateKey error:nil];
+		[url getResourceValue:&kind forKey:NSURLLocalizedTypeDescriptionKey error:nil];
+		[url getResourceValue:&tags forKey:NSURLTagNamesKey error:nil];
+
+		NSString *version = @"";
+		NSBundle *bundle = [NSBundle bundleWithURL:url];
+		id versionValue = [bundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+		if ([versionValue isKindOfClass:NSString.class])
+		{
+			version = versionValue;
+		}
+
+		NSString *comments = @"";
+		MDItemRef metadataItem = MDItemCreate(kCFAllocatorDefault, (__bridge CFStringRef)url.path);
+		if (metadataItem != NULL)
+		{
+			id commentValue = CFBridgingRelease(MDItemCopyAttribute(metadataItem, kMDItemFinderComment));
+			if ([commentValue isKindOfClass:NSString.class])
+			{
+				comments = commentValue;
+			}
+			CFRelease(metadataItem);
+		}
+
+		NSDictionary *result = @{
+			@"AddedUnixSeconds": addedDate == nil ? NSNull.null : @(addedDate.timeIntervalSince1970),
+			@"LastOpenedUnixSeconds": lastOpenedDate == nil ? NSNull.null : @(lastOpenedDate.timeIntervalSince1970),
+			@"Kind": kind ?: @"",
+			@"Version": version,
+			@"Comments": comments,
+			@"Tags": tags ?: @[],
+		};
+		return files_copy_json(result);
+	}
+}
+
 __attribute__((visibility("default"))) char *files_macos_set_finder_tags(const char *path, const char *tagsJson)
 {
 	@autoreleasepool

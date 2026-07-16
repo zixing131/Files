@@ -11,7 +11,14 @@ public sealed partial class LocalFileSystemItem(
 	bool isHidden,
 	long? size,
 	DateTimeOffset modified,
-	bool isPackage = false) : ObservableObject
+	bool isPackage = false,
+	DateTimeOffset? created = null,
+	DateTimeOffset? lastOpened = null,
+	DateTimeOffset? added = null,
+	IReadOnlyList<string>? tags = null,
+	string? version = null,
+	string? comments = null,
+	string? kind = null) : ObservableObject
 {
 	public string Path { get; } = path;
 
@@ -30,6 +37,24 @@ public sealed partial class LocalFileSystemItem(
 	public long? Size { get; } = size;
 
 	public DateTimeOffset Modified { get; } = modified;
+
+	public DateTimeOffset Created { get; } = created ?? modified;
+
+	public DateTimeOffset LastOpened { get; } = lastOpened ?? modified;
+
+	public DateTimeOffset Added { get; } = added ?? created ?? modified;
+
+	public string Kind { get; } = kind ?? (isPackage
+		? "app"
+		: isDirectory
+			? "folder"
+			: System.IO.Path.GetExtension(path).TrimStart('.'));
+
+	public string TagsText { get; } = string.Join(", ", tags ?? []);
+
+	public string Version { get; } = version ?? string.Empty;
+
+	public string Comments { get; } = comments ?? string.Empty;
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor(nameof(HasThumbnail))]

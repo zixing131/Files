@@ -228,9 +228,18 @@
   <data name="SortModifiedItem.Text" xml:space="preserve">
     <value>修改日期</value>
   </data>
+  <data name="SortCreatedItem.Text" xml:space="preserve"><value>创建日期</value></data>
+  <data name="SortLastOpenedItem.Text" xml:space="preserve"><value>上次打开日期</value></data>
+  <data name="SortAddedItem.Text" xml:space="preserve"><value>添加日期</value></data>
   <data name="SortSizeItem.Text" xml:space="preserve">
     <value>大小</value>
   </data>
+  <data name="SortKindItem.Text" xml:space="preserve"><value>种类</value></data>
+  <data name="SortLastModifiedByItem.Text" xml:space="preserve"><value>上次修改者</value></data>
+  <data name="SortSharedByItem.Text" xml:space="preserve"><value>共享者</value></data>
+  <data name="SortVersionItem.Text" xml:space="preserve"><value>版本</value></data>
+  <data name="SortCommentsItem.Text" xml:space="preserve"><value>注释</value></data>
+  <data name="SortTagsItem.Text" xml:space="preserve"><value>标签</value></data>
   <data name="SortAscendingItem.Text" xml:space="preserve">
     <value>升序</value>
   </data>
@@ -364,6 +373,7 @@
   <data name="DefaultGridViewSetting" xml:space="preserve">
     <value>新标签页默认使用网格视图</value>
   </data>
+  <data name="ConfirmMoveToTrashSetting" xml:space="preserve"><value>移到废纸篓前询问</value></data>
   <data name="SaveButtonText" xml:space="preserve">
     <value>保存</value>
   </data>

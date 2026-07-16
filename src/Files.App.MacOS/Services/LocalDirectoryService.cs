@@ -25,6 +25,7 @@ public sealed class LocalDirectoryService : IDirectoryService
 					bool isPackage = isDirectory && MacOSFilePackage.IsPackage(info);
 					bool isHidden = attributes.HasFlag(System.IO.FileAttributes.Hidden) || info.Name.StartsWith('.');
 					long? size = info is FileInfo fileInfo ? fileInfo.Length : null;
+					MacOSFinderTagService.SortMetadata sortMetadata = MacOSFinderTagService.GetSortMetadata(info.FullName);
 
 					items.Add(new(
 						info.FullName,
@@ -33,7 +34,14 @@ public sealed class LocalDirectoryService : IDirectoryService
 						isHidden,
 						size,
 						info.LastWriteTimeUtc,
-						isPackage));
+						isPackage,
+						info.CreationTimeUtc,
+						sortMetadata.LastOpened ?? info.LastAccessTimeUtc,
+						sortMetadata.Added ?? info.CreationTimeUtc,
+						sortMetadata.Tags,
+						sortMetadata.Version,
+						sortMetadata.Comments,
+						sortMetadata.Kind));
 				}
 				catch (IOException)
 				{

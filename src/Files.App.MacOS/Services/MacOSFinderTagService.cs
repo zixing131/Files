@@ -6,6 +6,49 @@ namespace Files.App.MacOS.Services;
 
 internal static class MacOSFinderTagService
 {
+	internal sealed record SortMetadata(
+		double? AddedUnixSeconds,
+		double? LastOpenedUnixSeconds,
+		string? Kind,
+		string? Version,
+		string? Comments,
+		string[]? Tags)
+	{
+		public DateTimeOffset? Added => FromUnixSeconds(AddedUnixSeconds);
+
+		public DateTimeOffset? LastOpened => FromUnixSeconds(LastOpenedUnixSeconds);
+
+		private static DateTimeOffset? FromUnixSeconds(double? value) => value is { } seconds && double.IsFinite(seconds)
+			? DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000))
+			: null;
+	}
+
+	public static SortMetadata GetSortMetadata(string path)
+	{
+		try
+		{
+			nint resultPointer = MacOSNativeMethods.GetFileSortMetadata(path);
+			if (resultPointer is 0)
+			{
+				return new(null, null, null, null, null, []);
+			}
+
+			try
+			{
+				string json = Marshal.PtrToStringUTF8(resultPointer) ?? "{}";
+				return JsonSerializer.Deserialize<SortMetadata>(json) ?? new(null, null, null, null, null, []);
+			}
+			finally
+			{
+				MacOSNativeMethods.Free(resultPointer);
+			}
+		}
+		catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or JsonException)
+		{
+			return new(null, null, null, null, null, []);
+		}
+	}
+
 	public static IReadOnlyList<string> GetTags(string path)
 	{
 		try

@@ -15,7 +15,14 @@ public enum FileSortField
 {
 	Name,
 	Modified,
+	Created,
+	LastOpened,
+	Added,
 	Size,
+	Kind,
+	Version,
+	Comments,
+	Tags,
 }
 
 public enum FileSortDirection
@@ -393,8 +400,22 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 		{
 			(FileSortField.Modified, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.Modified),
 			(FileSortField.Modified, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Modified),
+			(FileSortField.Created, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.Created),
+			(FileSortField.Created, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Created),
+			(FileSortField.LastOpened, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.LastOpened),
+			(FileSortField.LastOpened, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.LastOpened),
+			(FileSortField.Added, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.Added),
+			(FileSortField.Added, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Added),
 			(FileSortField.Size, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.Size ?? 0),
 			(FileSortField.Size, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Size ?? 0),
+			(FileSortField.Kind, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.Kind, StringComparer.CurrentCultureIgnoreCase),
+			(FileSortField.Kind, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Kind, StringComparer.CurrentCultureIgnoreCase),
+			(FileSortField.Version, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.Version, StringComparer.CurrentCultureIgnoreCase),
+			(FileSortField.Version, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Version, StringComparer.CurrentCultureIgnoreCase),
+			(FileSortField.Comments, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.Comments, StringComparer.CurrentCultureIgnoreCase),
+			(FileSortField.Comments, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Comments, StringComparer.CurrentCultureIgnoreCase),
+			(FileSortField.Tags, FileSortDirection.Ascending) => orderedItems.ThenBy(static item => item.TagsText, StringComparer.CurrentCultureIgnoreCase),
+			(FileSortField.Tags, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.TagsText, StringComparer.CurrentCultureIgnoreCase),
 			(FileSortField.Name, FileSortDirection.Descending) => orderedItems.ThenByDescending(static item => item.Name, StringComparer.CurrentCultureIgnoreCase),
 			_ => orderedItems.ThenBy(static item => item.Name, StringComparer.CurrentCultureIgnoreCase),
 		};
