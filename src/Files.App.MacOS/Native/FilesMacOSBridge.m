@@ -66,9 +66,144 @@ typedef int (*FilesScrollWheelCallback)(void *context, double deltaX, double del
 
 @end
 
+@interface FilesFileDraggingSource : NSObject <NSDraggingSource>
+@end
+
+@implementation FilesFileDraggingSource
+
+- (NSDragOperation)draggingSession:(NSDraggingSession *)session sourceOperationMaskForDraggingContext:(NSDraggingContext)context
+{
+	return NSDragOperationCopy;
+}
+
+- (BOOL)ignoreModifierKeysForDraggingSession:(NSDraggingSession *)session
+{
+	return YES;
+}
+
+@end
+
 static FilesQuickLookDataSource *quickLookDataSource;
 static NSSharingServicePicker *sharingServicePicker;
 static FilesMenuTarget *mainMenuTarget;
+static FilesFileDraggingSource *fileDraggingSource;
+static NSArray<NSString *> *pendingFileDragPaths;
+static NSWindow *pendingFileDragWindow;
+static id fileDragEventMonitor;
+
+static void files_macos_clear_pending_file_drag(void)
+{
+	if (fileDragEventMonitor != nil)
+	{
+		[NSEvent removeMonitor:fileDragEventMonitor];
+		fileDragEventMonitor = nil;
+	}
+	pendingFileDragPaths = nil;
+	pendingFileDragWindow = nil;
+}
+
+static BOOL files_macos_begin_pending_file_drag(NSEvent *event)
+{
+	NSWindow *window = pendingFileDragWindow;
+	NSView *view = window.contentView;
+	NSArray<NSString *> *paths = pendingFileDragPaths;
+	if (event == nil || window == nil || view == nil || paths.count == 0)
+	{
+		files_macos_clear_pending_file_drag();
+		return NO;
+	}
+
+	NSMutableArray<NSDraggingItem *> *items = [NSMutableArray arrayWithCapacity:paths.count];
+	NSPoint location = [view convertPoint:event.locationInWindow fromView:nil];
+	NSInteger index = 0;
+	for (NSString *path in paths)
+	{
+		NSURL *url = [NSURL fileURLWithPath:path];
+		if (![NSFileManager.defaultManager fileExistsAtPath:url.path])
+		{
+			continue;
+		}
+
+		NSDraggingItem *item = [[NSDraggingItem alloc] initWithPasteboardWriter:url];
+		NSImage *icon = [NSWorkspace.sharedWorkspace iconForFile:path];
+		icon.size = NSMakeSize(64, 64);
+		CGFloat offset = MIN(index, 4) * 4;
+		[item setDraggingFrame:NSMakeRect(location.x - 32 + offset, location.y - 32 - offset, 64, 64) contents:icon];
+		[items addObject:item];
+		index++;
+	}
+
+	files_macos_clear_pending_file_drag();
+	if (items.count == 0)
+	{
+		return NO;
+	}
+	if (fileDraggingSource == nil)
+	{
+		fileDraggingSource = [FilesFileDraggingSource new];
+	}
+
+	NSDraggingSession *session = [view beginDraggingSessionWithItems:items event:event source:fileDraggingSource];
+	session.animatesToStartingPositionsOnCancelOrFail = YES;
+	return session != nil;
+}
+
+__attribute__((visibility("default"))) int files_macos_prepare_file_drag(const char *pathsJson)
+{
+	@autoreleasepool
+	{
+		files_macos_clear_pending_file_drag();
+		if (pathsJson == NULL)
+		{
+			return 0;
+		}
+
+		NSData *jsonData = [[NSData alloc] initWithBytes:pathsJson length:strlen(pathsJson)];
+		id value = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:nil];
+		if (![value isKindOfClass:NSArray.class])
+		{
+			return 0;
+		}
+
+		NSMutableArray<NSString *> *paths = [NSMutableArray array];
+		for (id path in (NSArray *)value)
+		{
+			if ([path isKindOfClass:NSString.class] && [NSFileManager.defaultManager fileExistsAtPath:path])
+			{
+				[paths addObject:path];
+			}
+		}
+		NSWindow *window = NSApp.keyWindow ?: NSApp.mainWindow;
+		if (paths.count == 0 || window == nil)
+		{
+			return 0;
+		}
+
+		pendingFileDragPaths = [paths copy];
+		pendingFileDragWindow = window;
+		fileDragEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *event) {
+			if (event.type == NSEventTypeLeftMouseUp)
+			{
+				files_macos_clear_pending_file_drag();
+				return event;
+			}
+
+			NSWindow *sourceWindow = pendingFileDragWindow;
+			NSPoint screenPoint = event.window == nil
+				? NSEvent.mouseLocation
+				: [event.window convertPointToScreen:event.locationInWindow];
+			NSRect internalDragFrame = sourceWindow == nil ? NSZeroRect : NSInsetRect(sourceWindow.frame, 8, 8);
+			if (sourceWindow != nil && NSPointInRect(screenPoint, internalDragFrame))
+			{
+				return event;
+			}
+
+			files_macos_begin_pending_file_drag(event);
+			return event;
+		}];
+		return fileDragEventMonitor == nil ? 0 : 1;
+	}
+}
 
 static BOOL files_macos_symbol_font_has_required_glyphs(void)
 {

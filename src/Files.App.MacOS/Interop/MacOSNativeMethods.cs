@@ -58,6 +58,9 @@ internal static partial class MacOSNativeMethods
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_register_symbol_font")]
 	internal static partial int RegisterSymbolFont();
 
+	[LibraryImport(LibraryName, EntryPoint = "files_macos_prepare_file_drag", StringMarshalling = StringMarshalling.Utf8)]
+	internal static partial int PrepareFileDrag(string pathsJson);
+
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_announce_accessibility", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial int AnnounceAccessibility(string announcement, int highPriority);
 
