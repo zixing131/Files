@@ -583,8 +583,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		currentSettings = settingsBeforeContextMenuDiagnostic;
 		bool customizedContextMenu = customizedContextFlyout.Items is
 		[
-			MenuFlyoutSubItem { Tag: "MoreActions", Items: [MenuFlyoutItem { Tag: "Copy" }] },
 			MenuFlyoutItem { Tag: "Open" },
+			MenuFlyoutSubItem { Tag: "MoreActions", Items: [MenuFlyoutItem { Tag: "Copy" }] },
 		];
 		string[] expectedBackgroundActions =
 		[
@@ -3532,27 +3532,25 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		var flyout = new MenuFlyout();
 		ContextMenuActionSetting[] actions = currentSettings.ContextMenuActions ?? ContextMenuActionSetting.CreateDefaults();
 		ContextMenuActionSetting[] secondaryActions = actions.Where(static item => item.Level is ContextMenuLevel.Secondary).ToArray();
-		bool secondaryAdded = false;
 		foreach (ContextMenuActionSetting action in actions)
 		{
 			if (action.Level is ContextMenuLevel.Primary)
 			{
 				flyout.Items.Add(CreateItemContextMenuItem(GetContextMenuResourceKey(action.Action), action.Action));
 			}
-			else if (action.Level is ContextMenuLevel.Secondary && !secondaryAdded)
+		}
+		if (secondaryActions.Length > 0)
+		{
+			var moreActions = new MenuFlyoutSubItem
 			{
-				var moreActions = new MenuFlyoutSubItem
-				{
-					Text = GetResource("ContextMoreActionsSubItem/Text"),
-					Tag = "MoreActions",
-				};
-				foreach (ContextMenuActionSetting secondaryAction in secondaryActions)
-				{
-					moreActions.Items.Add(CreateItemContextMenuItem(GetContextMenuResourceKey(secondaryAction.Action), secondaryAction.Action));
-				}
-				flyout.Items.Add(moreActions);
-				secondaryAdded = true;
+				Text = GetResource("ContextMoreActionsSubItem/Text"),
+				Tag = "MoreActions",
+			};
+			foreach (ContextMenuActionSetting secondaryAction in secondaryActions)
+			{
+				moreActions.Items.Add(CreateItemContextMenuItem(GetContextMenuResourceKey(secondaryAction.Action), secondaryAction.Action));
 			}
+			flyout.Items.Add(moreActions);
 		}
 		if (flyout.Items.Count is 0)
 		{
