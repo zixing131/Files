@@ -1555,6 +1555,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	bool IMacOSMenuCommandTarget.CanExecuteMenuCommand(MacOSMenuCommand command)
 	{
 		bool isIdle = fileTransferCancellation is null && !isHistoryOperationRunning && !isConnectingServer;
+		TextBox? focusedTextBox = GetFocusedTextBox();
 		return command switch
 		{
 			MacOSMenuCommand.NewWindow => true,
@@ -1568,12 +1569,14 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			MacOSMenuCommand.MoveTabToNewWindow => isIdle && ViewModel.Tabs.Count > 1,
 			MacOSMenuCommand.NextTab or MacOSMenuCommand.PreviousTab => isIdle && ViewModel.Tabs.Count > 1,
 			MacOSMenuCommand.Properties or MacOSMenuCommand.MoveToTrash or MacOSMenuCommand.DeletePermanently or MacOSMenuCommand.Rename or
-				MacOSMenuCommand.Cut or MacOSMenuCommand.Copy or MacOSMenuCommand.CopyPath => isIdle && selectedItems.Count > 0,
+				MacOSMenuCommand.CopyPath => isIdle && selectedItems.Count > 0,
+			MacOSMenuCommand.Cut or MacOSMenuCommand.Copy => focusedTextBox?.SelectionLength > 0 || isIdle && selectedItems.Count > 0,
 			MacOSMenuCommand.OpenWith => isIdle && selectedItems is [LocalFileSystemItem { IsNavigableDirectory: false }],
 			MacOSMenuCommand.OpenInNewTab => isIdle && selectedItems is [LocalFileSystemItem { IsNavigableDirectory: true }],
 			MacOSMenuCommand.Duplicate => isIdle && CanDuplicateSelection(),
 			MacOSMenuCommand.CreateSymbolicLink => isIdle && selectedItems.Count > 0,
-			MacOSMenuCommand.Paste => PasteButton.IsEnabled,
+			MacOSMenuCommand.Paste => focusedTextBox is not null || PasteButton.IsEnabled,
+			MacOSMenuCommand.SelectAll => focusedTextBox is not null || isIdle,
 			MacOSMenuCommand.Undo => isIdle && undoHistory.Count > 0,
 			MacOSMenuCommand.Redo => isIdle && redoHistory.Count > 0,
 			MacOSMenuCommand.Back => isIdle && Browser?.CanGoBack is true,
@@ -1664,16 +1667,44 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				await ReplayHistoryAsync(isUndo: false);
 				break;
 			case MacOSMenuCommand.Cut:
-				await SetFileClipboardAsync(FileTransferMode.Move);
+				if (GetFocusedTextBox() is TextBox cutTextBox)
+				{
+					CopyTextSelection(cutTextBox, removeSelection: true);
+				}
+				else
+				{
+					await SetFileClipboardAsync(FileTransferMode.Move);
+				}
 				break;
 			case MacOSMenuCommand.Copy:
-				await SetFileClipboardAsync(FileTransferMode.Copy);
+				if (GetFocusedTextBox() is TextBox copyTextBox)
+				{
+					CopyTextSelection(copyTextBox, removeSelection: false);
+				}
+				else
+				{
+					await SetFileClipboardAsync(FileTransferMode.Copy);
+				}
 				break;
 			case MacOSMenuCommand.Paste:
-				await PasteAsync();
+				if (GetFocusedTextBox() is TextBox pasteTextBox)
+				{
+					await PasteTextAsync(pasteTextBox);
+				}
+				else
+				{
+					await PasteAsync();
+				}
 				break;
 			case MacOSMenuCommand.SelectAll:
-				SelectItems(invert: false);
+				if (GetFocusedTextBox() is TextBox selectAllTextBox)
+				{
+					selectAllTextBox.SelectAll();
+				}
+				else
+				{
+					SelectItems(invert: false);
+				}
 				break;
 			case MacOSMenuCommand.CopyPath:
 				CopySelectedPaths();
@@ -1953,6 +1984,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		AddressBox.Visibility = Visibility.Visible;
 		AddressBox.Focus(FocusState.Programmatic);
 		AddressBox.SelectAll();
+		UpdateCommandStates();
 	}
 
 	private void EndAddressEdit()
@@ -1965,6 +1997,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		AddressBox.Visibility = Visibility.Collapsed;
 		BreadcrumbScrollViewer.Visibility = Visibility.Visible;
 		UpdateAddressBar();
+		UpdateCommandStates();
 	}
 
 	private void UpdateAddressBar()
@@ -2814,9 +2847,44 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
-	private bool IsTextInputFocused()
+	private TextBox? GetFocusedTextBox() =>
+		XamlRoot is not null ? FocusManager.GetFocusedElement(XamlRoot) as TextBox : null;
+
+	private bool IsTextInputFocused() => GetFocusedTextBox() is not null;
+
+	private static void CopyTextSelection(TextBox textBox, bool removeSelection)
 	{
-		return XamlRoot is not null && FocusManager.GetFocusedElement(XamlRoot) is TextBox;
+		if (textBox.SelectionLength <= 0)
+		{
+			return;
+		}
+
+		int selectionStart = textBox.SelectionStart;
+		string selectedText = textBox.Text.Substring(selectionStart, textBox.SelectionLength);
+		var data = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+		data.SetText(selectedText);
+		Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(data);
+		if (removeSelection)
+		{
+			textBox.Text = textBox.Text.Remove(selectionStart, textBox.SelectionLength);
+			textBox.SelectionStart = selectionStart;
+			textBox.SelectionLength = 0;
+		}
+	}
+
+	private static async Task PasteTextAsync(TextBox textBox)
+	{
+		DataPackageView content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+		if (!content.Contains(StandardDataFormats.Text))
+		{
+			return;
+		}
+
+		string pastedText = await content.GetTextAsync();
+		int selectionStart = textBox.SelectionStart;
+		textBox.Text = textBox.Text.Remove(selectionStart, textBox.SelectionLength).Insert(selectionStart, pastedText);
+		textBox.SelectionStart = selectionStart + pastedText.Length;
+		textBox.SelectionLength = 0;
 	}
 
 	private async void CopyButton_Click(object sender, RoutedEventArgs e)
