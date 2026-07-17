@@ -44,10 +44,10 @@ function notarize_file()
 	fi
 
 	cat "$result_file"
-	local status
-	status="$(plutil -extract status raw -o - "$result_file")"
-	if [[ "$status" != "Accepted" ]]; then
-		print -u2 "Apple notarization did not accept $label (status: $status)."
+	local notary_status
+	notary_status="$(plutil -extract status raw -o - "$result_file")"
+	if [[ "$notary_status" != "Accepted" ]]; then
+		print -u2 "Apple notarization did not accept $label (status: $notary_status)."
 		return 1
 	fi
 }
