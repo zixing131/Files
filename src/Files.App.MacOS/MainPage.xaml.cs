@@ -5434,7 +5434,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			contextMenuActions = ContextMenuActionSetting.CreateDefaults().ToList();
 			RenderContextMenuEditor();
 		};
-		double settingsDialogWidth = Math.Clamp((XamlRoot?.Size.Width ?? 1200) - 80, 680, 1120);
+		double settingsDialogWidth = Math.Clamp((XamlRoot?.Size.Width ?? 800) - 80, 680, 720);
 		var content = new StackPanel
 		{
 			Spacing = 16,
@@ -5554,7 +5554,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			Width = settingsDialogWidth,
 			MinWidth = settingsDialogWidth,
-			MaxWidth = settingsDialogWidth,
 			Title = GetResource("SettingsDialogTitle"),
 			Content = new ScrollViewer
 			{
