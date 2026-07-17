@@ -5225,36 +5225,61 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		contextMenuEditor.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 		contextMenuEditor.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 		contextMenuEditor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-		contextMenuEditor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-		void ChangeContextMenuLevel(ContextMenuActionSetting action, ContextMenuLevel targetLevel)
+		ContextMenuLevel GetContextMenuEditorLevel(ContextMenuActionSetting action)
 		{
-			var primary = contextMenuActions.Where(static item => item.Level is ContextMenuLevel.Primary).ToList();
-			var secondary = contextMenuActions.Where(static item => item.Level is ContextMenuLevel.Secondary).ToList();
-			var hidden = contextMenuActions.Where(static item => item.Level is ContextMenuLevel.Hidden).ToList();
-			primary.RemoveAll(item => string.Equals(item.Action, action.Action, StringComparison.Ordinal));
-			secondary.RemoveAll(item => string.Equals(item.Action, action.Action, StringComparison.Ordinal));
-			hidden.RemoveAll(item => string.Equals(item.Action, action.Action, StringComparison.Ordinal));
-			ContextMenuActionSetting movedAction = action with { Level = targetLevel };
-			switch (targetLevel)
+			if (action.Level is ContextMenuLevel.Primary or ContextMenuLevel.Secondary)
 			{
-				case ContextMenuLevel.Primary:
-					primary.Add(movedAction);
-					break;
-				case ContextMenuLevel.Secondary:
-					secondary.Add(movedAction);
-					break;
-				default:
-					hidden.Add(movedAction);
-					break;
+				return action.Level;
 			}
-			contextMenuActions = primary.Concat(secondary).Concat(hidden).ToList();
+
+			return action.VisibleLevel is ContextMenuLevel.Primary or ContextMenuLevel.Secondary
+				? action.VisibleLevel.Value
+				: ContextMenuActionSetting.CreateDefaults()
+					.First(item => string.Equals(item.Action, action.Action, StringComparison.Ordinal)).Level;
+		}
+
+		void GroupContextMenuActionsByEditorLevel()
+		{
+			contextMenuActions = contextMenuActions
+				.OrderBy(item => GetContextMenuEditorLevel(item) is ContextMenuLevel.Primary ? 0 : 1)
+				.ToList();
+		}
+
+		void MoveContextMenuToColumn(ContextMenuActionSetting action, ContextMenuLevel targetLevel)
+		{
+			int actionIndex = contextMenuActions.FindIndex(item => string.Equals(item.Action, action.Action, StringComparison.Ordinal));
+			if (actionIndex < 0)
+			{
+				return;
+			}
+
+			contextMenuActions[actionIndex] = action.Level is ContextMenuLevel.Hidden
+				? action with { VisibleLevel = targetLevel }
+				: action with { Level = targetLevel, VisibleLevel = targetLevel };
+			GroupContextMenuActionsByEditorLevel();
+			RenderContextMenuEditor();
+		}
+
+		void ToggleContextMenuActionVisibility(ContextMenuActionSetting action)
+		{
+			int actionIndex = contextMenuActions.FindIndex(item => string.Equals(item.Action, action.Action, StringComparison.Ordinal));
+			if (actionIndex < 0)
+			{
+				return;
+			}
+
+			ContextMenuLevel editorLevel = GetContextMenuEditorLevel(action);
+			contextMenuActions[actionIndex] = action.Level is ContextMenuLevel.Hidden
+				? action with { Level = editorLevel, VisibleLevel = editorLevel }
+				: action with { Level = ContextMenuLevel.Hidden, VisibleLevel = editorLevel };
 			RenderContextMenuEditor();
 		}
 
 		void MoveContextMenuAction(ContextMenuActionSetting action, int offset)
 		{
-			ContextMenuActionSetting[] levelActions = contextMenuActions.Where(item => item.Level == action.Level).ToArray();
+			ContextMenuLevel editorLevel = GetContextMenuEditorLevel(action);
+			ContextMenuActionSetting[] levelActions = contextMenuActions.Where(item => GetContextMenuEditorLevel(item) == editorLevel).ToArray();
 			int levelIndex = Array.FindIndex(levelActions, item => string.Equals(item.Action, action.Action, StringComparison.Ordinal));
 			int targetLevelIndex = levelIndex + offset;
 			if (levelIndex < 0 || targetLevelIndex < 0 || targetLevelIndex >= levelActions.Length)
@@ -5287,7 +5312,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			};
 			Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, label);
 			ToolTipService.SetToolTip(button, label);
-			button.Click += (_, _) => ChangeContextMenuLevel(action, targetLevel);
+			button.Click += (_, _) => MoveContextMenuToColumn(action, targetLevel);
 			return button;
 		}
 
@@ -5300,13 +5325,14 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			cardLayout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 			var label = new TextBlock
 			{
-				Text = GetResource(GetContextMenuResourceKey(action.Action)),
+				Text = GetResource(GetContextMenuResourceKey(action.Action)) +
+					(action.Level is ContextMenuLevel.Hidden ? GetResource("ContextMenuHiddenSuffix") : string.Empty),
 				VerticalAlignment = VerticalAlignment.Center,
 				TextTrimming = TextTrimming.CharacterEllipsis,
 			};
 			Button levelButton = CreateLevelArrowButton(
 				action,
-				action.Level is ContextMenuLevel.Primary ? ContextMenuLevel.Secondary : ContextMenuLevel.Primary);
+				GetContextMenuEditorLevel(action) is ContextMenuLevel.Primary ? ContextMenuLevel.Secondary : ContextMenuLevel.Primary);
 			var actionButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
 			var moveUpButton = new Button
 			{
@@ -5324,10 +5350,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			moveDownButton.Click += (_, _) => MoveContextMenuAction(action, 1);
 			var hideButton = new Button
 			{
-				Content = GetResource("ContextMenuHiddenLevelOption"),
+				Content = GetResource(action.Level is ContextMenuLevel.Hidden ? "ContextMenuShowLevelOption" : "ContextMenuHiddenLevelOption"),
 				Padding = new Thickness(7, 3),
 			};
-			hideButton.Click += (_, _) => ChangeContextMenuLevel(action, ContextMenuLevel.Hidden);
+			hideButton.Click += (_, _) => ToggleContextMenuActionVisibility(action);
 			actionButtons.Children.Add(moveUpButton);
 			actionButtons.Children.Add(moveDownButton);
 			actionButtons.Children.Add(hideButton);
@@ -5352,8 +5378,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		void RenderContextMenuEditor()
 		{
 			contextMenuEditor.Children.Clear();
-			ContextMenuActionSetting[] primaryActions = contextMenuActions.Where(static item => item.Level is ContextMenuLevel.Primary).ToArray();
-			ContextMenuActionSetting[] secondaryActions = contextMenuActions.Where(static item => item.Level is ContextMenuLevel.Secondary).ToArray();
+			ContextMenuActionSetting[] primaryActions = contextMenuActions.Where(item => GetContextMenuEditorLevel(item) is ContextMenuLevel.Primary).ToArray();
+			ContextMenuActionSetting[] secondaryActions = contextMenuActions.Where(item => GetContextMenuEditorLevel(item) is ContextMenuLevel.Secondary).ToArray();
 			var primaryColumn = new StackPanel { Spacing = 6 };
 			primaryColumn.Children.Add(new TextBlock
 			{
@@ -5377,56 +5403,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			Grid.SetColumn(secondaryColumn, 1);
 			contextMenuEditor.Children.Add(primaryColumn);
 			contextMenuEditor.Children.Add(secondaryColumn);
-
-			ContextMenuActionSetting[] hiddenActions = contextMenuActions.Where(static item => item.Level is ContextMenuLevel.Hidden).ToArray();
-			if (hiddenActions.Length > 0)
-			{
-				var hiddenPanel = new StackPanel { Spacing = 6 };
-				hiddenPanel.Children.Add(new TextBlock
-				{
-					Text = GetResource("ContextMenuHiddenCommandsLabel"),
-					FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-				});
-				foreach (ContextMenuActionSetting hiddenAction in hiddenActions)
-				{
-					var hiddenRow = new Grid { ColumnSpacing = 6 };
-					hiddenRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-					hiddenRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-					hiddenRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-					var hiddenLabel = new TextBlock
-					{
-						Text = GetResource(GetContextMenuResourceKey(hiddenAction.Action)),
-						VerticalAlignment = VerticalAlignment.Center,
-					};
-					var showPrimaryButton = new Button
-					{
-						Content = GetResource("ContextMenuPrimaryLevelOption"),
-						Padding = new Thickness(8, 3),
-					};
-					showPrimaryButton.Click += (_, _) => ChangeContextMenuLevel(hiddenAction, ContextMenuLevel.Primary);
-					var showSecondaryButton = new Button
-					{
-						Content = GetResource("ContextMenuSecondaryLevelOption"),
-						Padding = new Thickness(8, 3),
-					};
-					showSecondaryButton.Click += (_, _) => ChangeContextMenuLevel(hiddenAction, ContextMenuLevel.Secondary);
-					Grid.SetColumn(showPrimaryButton, 1);
-					Grid.SetColumn(showSecondaryButton, 2);
-					hiddenRow.Children.Add(hiddenLabel);
-					hiddenRow.Children.Add(showPrimaryButton);
-					hiddenRow.Children.Add(showSecondaryButton);
-					hiddenPanel.Children.Add(new Border
-					{
-						Padding = new Thickness(9, 6),
-						Background = (Brush)Application.Current.Resources["FilesCardBrush"],
-						CornerRadius = new CornerRadius(7),
-						Child = hiddenRow,
-					});
-				}
-				Grid.SetRow(hiddenPanel, 1);
-				Grid.SetColumnSpan(hiddenPanel, 2);
-				contextMenuEditor.Children.Add(hiddenPanel);
-			}
 		}
 		RenderContextMenuEditor();
 		var resetContextMenuButton = new Button
@@ -5442,7 +5418,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		var content = new StackPanel
 		{
 			Spacing = 16,
-			Width = Math.Clamp((XamlRoot?.Size.Width ?? 840) - 120, 620, 820),
+			Width = Math.Clamp((XamlRoot?.Size.Width ?? 900) - 96, 700, 860),
 		};
 		content.Children.Add(new TextBlock { Text = GetResource("ThemeSettingLabel") });
 		content.Children.Add(themePicker);
@@ -5556,12 +5532,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 		var dialog = new ContentDialog
 		{
+			MaxWidth = 920,
 			Title = GetResource("SettingsDialogTitle"),
 			Content = new ScrollViewer
 			{
 				MaxHeight = 560,
-				HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-				HorizontalScrollMode = ScrollMode.Disabled,
+				HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+				HorizontalScrollMode = ScrollMode.Enabled,
 				VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
 				VerticalScrollMode = ScrollMode.Enabled,
 				Content = content,
@@ -7253,7 +7230,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				WindowPlacement = windowSession.PrimaryWindowPlacement,
 				AdditionalWindowPlacements = windowSession.AdditionalWindowPlacements,
 				SidebarWidth = mergedSettings.SidebarWidth,
-				SchemaVersion = 17,
+				SchemaVersion = 18,
 			};
 			await SettingsService.SaveAsync(updatedSettings, cancellationToken);
 			currentSettings = updatedSettings;

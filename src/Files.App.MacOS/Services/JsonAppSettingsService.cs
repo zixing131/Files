@@ -154,7 +154,7 @@ public sealed class JsonAppSettingsService : IAppSettingsService
 			IsSidebarOpen = settings.SchemaVersion < 4 || settings.IsSidebarOpen,
 			SidebarWidth = Math.Clamp(settings.SidebarWidth, 180, 420),
 			ConfirmMoveToTrash = settings.SchemaVersion < 14 || settings.ConfirmMoveToTrash,
-			SchemaVersion = 17,
+			SchemaVersion = 18,
 		};
 	}
 
@@ -166,6 +166,12 @@ public sealed class JsonAppSettingsService : IAppSettingsService
 			.Where(static item => item is not null && !string.IsNullOrWhiteSpace(item.Action) && Enum.IsDefined(item.Level))
 			.Where(item => supported.Contains(item.Action))
 			.DistinctBy(static item => item.Action, StringComparer.Ordinal)
+			.Select(item => item with
+			{
+				VisibleLevel = item.VisibleLevel is ContextMenuLevel.Primary or ContextMenuLevel.Secondary
+					? item.VisibleLevel
+					: defaults.First(defaultItem => string.Equals(defaultItem.Action, item.Action, StringComparison.Ordinal)).Level,
+			})
 			.ToList();
 		normalized.AddRange(defaults.Where(item => normalized.All(existing => !string.Equals(existing.Action, item.Action, StringComparison.Ordinal))));
 		return normalized.ToArray();

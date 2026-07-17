@@ -592,6 +592,8 @@
   <data name="ContextMenuPrimaryLevelOption" xml:space="preserve"><value>一级菜单</value></data>
   <data name="ContextMenuSecondaryLevelOption" xml:space="preserve"><value>更多操作</value></data>
   <data name="ContextMenuHiddenLevelOption" xml:space="preserve"><value>隐藏</value></data>
+  <data name="ContextMenuShowLevelOption" xml:space="preserve"><value>显示</value></data>
+  <data name="ContextMenuHiddenSuffix" xml:space="preserve"><value>（已隐藏）</value></data>
   <data name="MoveUpButtonText" xml:space="preserve"><value>上移</value></data>
   <data name="MoveDownButtonText" xml:space="preserve"><value>下移</value></data>
   <data name="ResetContextMenuButtonText" xml:space="preserve"><value>恢复默认菜单</value></data>

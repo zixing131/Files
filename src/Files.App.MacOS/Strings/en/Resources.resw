@@ -592,6 +592,8 @@
   <data name="ContextMenuPrimaryLevelOption" xml:space="preserve"><value>First level</value></data>
   <data name="ContextMenuSecondaryLevelOption" xml:space="preserve"><value>More actions</value></data>
   <data name="ContextMenuHiddenLevelOption" xml:space="preserve"><value>Hidden</value></data>
+  <data name="ContextMenuShowLevelOption" xml:space="preserve"><value>Show</value></data>
+  <data name="ContextMenuHiddenSuffix" xml:space="preserve"><value> (hidden)</value></data>
   <data name="MoveUpButtonText" xml:space="preserve"><value>Move up</value></data>
   <data name="MoveDownButtonText" xml:space="preserve"><value>Move down</value></data>
   <data name="ResetContextMenuButtonText" xml:space="preserve"><value>Restore default menu</value></data>

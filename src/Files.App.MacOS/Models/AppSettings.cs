@@ -31,7 +31,10 @@ public enum ContextMenuLevel
 	Secondary,
 }
 
-public sealed record ContextMenuActionSetting(string Action, ContextMenuLevel Level)
+public sealed record ContextMenuActionSetting(
+	string Action,
+	ContextMenuLevel Level,
+	ContextMenuLevel? VisibleLevel = null)
 {
 	public static ContextMenuActionSetting[] CreateDefaults() =>
 	[
@@ -86,7 +89,7 @@ public sealed record AppSettings(
 	string[]? DetailColumns = null,
 	DetailColumnWidthSetting[]? DetailColumnWidths = null,
 	ContextMenuActionSetting[]? ContextMenuActions = null,
-	int SchemaVersion = 17);
+	int SchemaVersion = 18);
 
 public sealed record DetailColumnWidthSetting(string Column, double Width);
 
