@@ -1,6 +1,27 @@
 # macOS Publishing
 
-The macOS project creates a self-contained, architecture-specific `Files.app` after a Release publish. This flow is isolated from the Windows solution and release pipeline.
+The macOS project creates a self-contained, architecture-specific `Files.app` after a Release publish.
+
+## Automated signed release
+
+After storing notarization credentials in Keychain with the `Files-MacOS-notary` profile, run:
+
+```shell
+./build_release.sh
+```
+
+The script automatically cleans and publishes the ARM64 Release build, signs and verifies `Files.app`, notarizes and staples the app, creates and signs the DMG, notarizes and staples the DMG, runs Gatekeeper verification and writes a SHA-256 checksum beside the artifact.
+
+It automatically selects the first valid `Developer ID Application` identity. Override release settings when required:
+
+```shell
+MACOS_SIGN_IDENTITY="Developer ID Application: Example (TEAMID)" \
+NOTARY_KEYCHAIN_PROFILE="Files-MacOS-notary" \
+RUNTIME_IDENTIFIER="osx-arm64" \
+./build_release.sh
+```
+
+Credentials and app-specific passwords are read from Keychain and are never stored in the script.
 
 ## Local ad-hoc packages
 
@@ -53,7 +74,7 @@ dotnet publish src/Files.App.MacOS/Files.App.MacOS.csproj \
   -p:MacOSCodeSignEntitlements="$PWD/src/Files.App.MacOS/Packaging/Files.entitlements"
 ```
 
-The same command is used with `osx-x64`. Release automation must then package the bundle with `ditto`, submit it with `notarytool`, staple the accepted ticket and run Gatekeeper assessment. Those credentialed steps are intentionally not executed by local builds.
+The same command is used with `osx-x64`. Prefer `build_release.sh` for public artifacts so the complete signing, notarization and verification sequence is not skipped.
 
 ## Verification
 

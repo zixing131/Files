@@ -39,7 +39,7 @@
 
 ## 安装
 
-当前提供 Apple Silicon（ARM64）DMG 安装包。下载最新的 `Files_MacOS-0.1.13-macos-arm64.dmg` 后：
+当前提供 Apple Silicon（ARM64）DMG 安装包。下载最新的 `Files_MacOS-0.1.14-macos-arm64.dmg` 后：
 
 1. 双击挂载 DMG。
 2. 将 `Files.app` 拖入“应用程序”。
@@ -82,6 +82,8 @@ src/Files.App.MacOS/bin/Release/net10.0-desktop/osx-arm64/Files.app
 - [macOS 移植规划](../docs/macos-porting-plan.md)
 - [macOS 移植状态](../docs/macos-porting-status.md)
 - [macOS 打包说明](../docs/macos-publishing.md)
+
+已配置 Developer ID 证书和公证钥匙串后，可在项目根目录运行 `./build_release.sh`，自动生成签名并完成 Apple 公证的 DMG。
 
 ## 技术栈
 
