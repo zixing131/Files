@@ -1,51 +1,98 @@
-<p align="center">
-  <img alt="Files hero image" src="./assets/ReadmeHero.png" />
-</p>
+<div align="center">
 
-<p align="center">
-  <a style="text-decoration:none" href="https://files.community/">
-    <img src="https://img.shields.io/badge/Files-Website-F9B81F" alt="Files Website" /></a>
-  <a style="text-decoration:none" href="https://github.com/files-community/Files/actions/workflows/ci.yml">
-    <img src="https://github.com/files-community/Files/actions/workflows/ci.yml/badge.svg" alt="Files CI Status" /></a>
-  <a style="text-decoration:none" href="https://crowdin.com/project/files-app">
-    <img src="https://badges.crowdin.net/files-app/localized.svg" alt="Files Localization Status" /></a>
-  <a style="text-decoration:none" href="https://discord.gg/files">
-    <img src="https://img.shields.io/discord/725513575971684472?label=Discord&color=7289da" alt="Files Discord" /></a>
-</p>
+# Files_MacOS
 
-Files is a modern file manager that helps users organize their files and folders. Our mission with Files is to build the best file manager for Windows, and we’re proud to be building it out in the open so everyone can participate. User feedback helps shape the features we work on, & the bug reports on GitHub help to make Files more reliable. Built and maintained by the open-source community, Files features robust multitasking experiences, file tags, deep integrations, and an intuitive design.
+面向 macOS 打造的现代文件管理器
 
-## Installing and running Files
+支持标签页、双栏浏览、网格与详细信息视图，并尽可能提供贴近访达的视觉和操作体验。
 
-Files is a community-driven project that depends on your support to grow and improve. Please consider purchasing Files through the Microsoft Store or supporting us on GitHub if you use the classic installer.
+</div>
 
-You can also use the preview version alongside the stable release to get early access to new features and improvements.
+## 项目说明
 
-<p align="left">
-  <!-- Store Badge -->
-  <a style="text-decoration:none" href="https://apps.microsoft.com/detail/9NGHP3DX8HDX?launch=true&mode=full">
-    <picture>
-      <source media="(prefers-color-scheme: light)" srcset="./assets/StoreBadge-dark.png" height="80" />
-      <img src="./assets/StoreBadge-light.png" height="80" /></picture></a>
-  &ensp;
-  <!-- Classic Installer Badge -->
-  <a style="text-decoration:none" href="https://files.community/appinstallers/Files.stable.appinstaller">
-    <picture>
-      <source media="(prefers-color-scheme: light)" srcset="./assets/ClassicInstallerBadge-dark.png" height="80" />
-      <img src="./assets/ClassicInstallerBadge-light.png" height="80" /></picture></a>
-</p>
+`Files_MacOS` 专注于 macOS，不再维护或发布 Windows 版本。项目使用 C#、.NET 10、Uno Platform 与原生 AppKit 桥接开发，在保留现代文件管理体验的同时，充分利用 macOS 的系统能力。
 
-## Building from source
+项目目前处于持续开发阶段，欢迎提交问题、改进建议和代码贡献。
 
-Instructions for building the source code can be found on our [documentation site](https://files.community/docs/contributing/building-from-source).
+## 功能亮点
 
+- 标签页、历史记录以及鼠标中键关闭标签页
+- 网格视图、详细信息视图与双栏浏览
+- 可自定义详细信息列、排序字段和排序方向
+- 访达风格侧边栏、系统强调色及中英文界面
+- macOS 原生文件图标、应用图标和缩略图
+- 文件复制、剪切、粘贴、重命名、拖放与多选
+- 废纸篓、永久删除、压缩文件和可移动驱动器弹出
+- 快速查看、共享、打开方式以及在终端中打开
+- 鼠标侧键前进/后退、键盘快捷定位和常用快捷键
+- 窗口、标签页、布局与用户设置持久化
 
-## Contributing to Files
+## 界面预览
 
-Want to contribute to this project? Let us know with an [issue](https://github.com/files-community/Files/issues) that communicates your intent to create a [pull request](https://github.com/files-community/Files/pulls). Also, view our [contributing guidelines](https://github.com/files-community/Files/blob/main/.github/CONTRIBUTING.md) to make sure you're up to date on the coding conventions.
+### 详细信息视图
 
-Looking for a place to start? Check out the [task board](https://github.com/orgs/files-community/projects/3/views/2), where you can sort tasks by size and priority.
+![Files_MacOS 详细信息视图](./assets/FilesMacOS-Details.png)
 
-## Screenshots
+### 系统磁盘浏览
 
-![Files](./assets/FilesScreenshot.png)
+![Files_MacOS 系统磁盘浏览](./assets/FilesMacOS-SystemDrive.png)
+
+## 安装
+
+当前提供 Apple Silicon（ARM64）DMG 安装包。下载最新的 `Files-0.1-macos-arm64.dmg` 后：
+
+1. 双击挂载 DMG。
+2. 将 `Files.app` 拖入“应用程序”。
+3. 从“应用程序”中启动 Files_MacOS。
+
+## 从源码构建
+
+### 环境要求
+
+- macOS
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- Xcode Command Line Tools
+
+### Debug 构建
+
+```bash
+dotnet build src/Files.App.MacOS/Files.App.MacOS.csproj \
+  -c Debug \
+  -r osx-arm64
+```
+
+### Release 发布
+
+```bash
+dotnet publish src/Files.App.MacOS/Files.App.MacOS.csproj \
+  -f net10.0-desktop \
+  -c Release \
+  -r osx-arm64
+```
+
+生成的应用位于：
+
+```text
+src/Files.App.MacOS/bin/Release/net10.0-desktop/osx-arm64/Files.app
+```
+
+更多构建和发布说明：
+
+- [macOS 移植规划](../docs/macos-porting-plan.md)
+- [macOS 移植状态](../docs/macos-porting-status.md)
+- [macOS 打包说明](../docs/macos-publishing.md)
+
+## 技术栈
+
+- C# / .NET 10
+- Uno Platform / WinUI 风格 XAML
+- AppKit、CoreText、Quick Look 与 NSWorkspace 原生桥接
+- ARM64 macOS 应用与 DMG 打包
+
+## 贡献
+
+提交代码前请先阅读 [贡献指南](./CONTRIBUTING.md) 和项目根目录的 `AGENTS.md`。提交应聚焦 macOS 功能、兼容性、性能、稳定性或界面体验。
+
+## 许可证
+
+许可证信息请参阅仓库中的 [LICENSE-MIT](../LICENSE-MIT) 与 [LICENSE-MPL](../LICENSE-MPL)。
