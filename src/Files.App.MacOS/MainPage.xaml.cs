@@ -627,6 +627,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			PrimaryModifiedHeaderButton.Visibility is Visibility.Collapsed &&
 			PrimarySizeHeaderButton.Visibility is Visibility.Collapsed &&
 			PrimaryDetailsHeader.ContextFlyout is null && SecondaryDetailsHeader.ContextFlyout is null &&
+			!IsBackgroundContextTarget(false, PrimaryNameHeaderButton, PrimaryPaneBorder, PrimaryDetailsHeader) &&
+			!IsBackgroundContextTarget(true, PrimaryPaneBorder, PrimaryPaneBorder, PrimaryDetailsHeader) &&
+			IsBackgroundContextTarget(false, PrimaryPaneBorder, PrimaryPaneBorder, PrimaryDetailsHeader) &&
 			DetailColumnState.Capture() is ["Created", "Kind"];
 		DetailColumnState.Apply(originalDetailColumns);
 		RootLayout.UpdateLayout();
@@ -3351,7 +3354,11 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		FrameworkElement pane,
 		MenuFlyout flyout)
 	{
-		if (browser is null || HasFileItemAncestor(e.OriginalSource as DependencyObject, pane))
+		DependencyObject? source = e.OriginalSource as DependencyObject;
+		FrameworkElement detailsHeader = ReferenceEquals(pane, PrimaryPaneBorder)
+			? PrimaryDetailsHeader
+			: SecondaryDetailsHeader;
+		if (browser is null || !IsBackgroundContextTarget(e.Handled, source, pane, detailsHeader))
 		{
 			return;
 		}
@@ -3376,6 +3383,25 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		for (DependencyObject? current = source; current is not null && !ReferenceEquals(current, pane); current = VisualTreeHelper.GetParent(current))
 		{
 			if (current is FrameworkElement { DataContext: LocalFileSystemItem })
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static bool IsBackgroundContextTarget(
+		bool eventHandled,
+		DependencyObject? source,
+		DependencyObject pane,
+		DependencyObject detailsHeader) =>
+		!eventHandled && !HasFileItemAncestor(source, pane) && !HasAncestor(source, detailsHeader);
+
+	private static bool HasAncestor(DependencyObject? source, DependencyObject ancestor)
+	{
+		for (DependencyObject? current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+		{
+			if (ReferenceEquals(current, ancestor))
 			{
 				return true;
 			}
@@ -6109,12 +6135,12 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void DetailsHeader_RightTapped(object sender, RightTappedRoutedEventArgs e)
 	{
+		e.Handled = true;
 		if (sender is not FrameworkElement header || Resources["DetailColumnsFlyout"] is not MenuFlyout flyout)
 		{
 			return;
 		}
 
-		e.Handled = true;
 		flyout.ShowAt(
 			header,
 			new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = e.GetPosition(header) });
