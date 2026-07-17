@@ -5570,6 +5570,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			DefaultButton = ContentDialogButton.Primary,
 			XamlRoot = XamlRoot,
 		};
+		dialog.Resources["ContentDialogMinWidth"] = settingsDialogWidth;
+		dialog.Resources["ContentDialogMaxWidth"] = settingsDialogWidth;
 		if (await dialog.ShowAsync() is not ContentDialogResult.Primary)
 		{
 			foreach (FolderAccessGrant pendingGrant in pendingLocationGrants)
