@@ -16,6 +16,15 @@ namespace Files.App.MacOS;
 
 public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 {
+	private sealed record QuickLookRestoreState(
+		DirectoryBrowserViewModel Browser,
+		string Path,
+		FrameworkElement Control,
+		double HorizontalOffset,
+		double VerticalOffset,
+		bool UsesScrollView,
+		bool HasScrollPosition);
+
 	private const double SplitDividerWidth = 8;
 	private const double MinimumPaneWidth = 240;
 	private const double SidebarDividerWidth = 6;
@@ -23,6 +32,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private const double MaximumSidebarWidth = 420;
 	private const double KeyboardResizeStep = 16;
 	private const long TypeSelectResetMilliseconds = 900;
+	private const long QuickLookToggleDebounceMilliseconds = 150;
+	private const string InternalFileDragFormat = "application/x-files-macos-internal-file-drag";
 	private const string HomeBreadcrumbIconData = "M7.07934 1.22258C7.60474 0.797737 8.35525 0.797737 8.88065 1.22258L15.4689 6.55068C16.5623 7.43475 15.9402 9.20232 14.5276 9.20232H14.25V13.75C14.25 14.7165 13.4665 15.5 12.5 15.5H10.5C9.5335 15.5 8.75 14.7165 8.75 13.75V11.25C8.75 10.8358 8.41421 10.5 8 10.5C7.58579 10.5 7.25 10.8358 7.25 11.25V13.75C7.25 14.7165 6.4665 15.5 5.5 15.5H3.5C2.5335 15.5 1.75 14.7165 1.75 13.75V9.20232H1.43239C0.0198307 9.20232 -0.602245 7.43475 0.491105 6.55068L7.07934 1.22258ZM8.25178 2.0001C8.09322 1.87188 7.86677 1.87188 7.70821 2.0001L1.11996 7.3282C0.756928 7.62179 0.963431 8.20232 1.43239 8.20232H2.75V13.75C2.75 14.1642 3.08579 14.5 3.5 14.5H5.5C5.91421 14.5 6.25 14.1642 6.25 13.75V11.25C6.25 10.2835 7.0335 9.5 8 9.5C8.9665 9.5 9.75 10.2835 9.75 11.25V13.75C9.75 14.1642 10.0858 14.5 10.5 14.5H12.5C12.9142 14.5 13.25 14.1642 13.25 13.75V8.20232H14.5276C14.9966 8.20232 15.2031 7.62179 14.84 7.3282L8.25178 2.0001Z";
 	private MainPageViewModel ViewModel { get; } = new();
 	private IFileOperationService FileOperationService { get; } = new LocalFileOperationService();
@@ -88,6 +99,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private DirectoryBrowserViewModel? typeSelectBrowser;
 	private string typeSelectPrefix = string.Empty;
 	private long lastTypeSelectTimestamp;
+	private long lastQuickLookToggleTimestamp;
+	private QuickLookRestoreState? quickLookRestoreState;
 	private string? lastControlClickPath;
 	private long lastControlClickTimestamp;
 
@@ -1852,6 +1865,197 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private async void PreviewAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (IsTextInputFocused() || Browser is not DirectoryBrowserViewModel browser)
+		{
+			return;
+		}
+
+		FrameworkElement control = GetVisibleItemsControl(browser);
+		ActivateBrowser(browser, control);
+		if (selectedItems is not [LocalFileSystemItem item])
+		{
+			return;
+		}
+
+		args.Handled = true;
+		await ToggleQuickLookAsync(item);
+	}
+
+	private async Task ToggleQuickLookAsync(LocalFileSystemItem item)
+	{
+		long timestamp = Environment.TickCount64;
+		if (timestamp - lastQuickLookToggleTimestamp is >= 0 and < QuickLookToggleDebounceMilliseconds)
+		{
+			return;
+		}
+		lastQuickLookToggleTimestamp = timestamp;
+
+		try
+		{
+			await WorkspaceService.PreviewAsync(item.Path);
+		}
+		catch (IOException)
+		{
+			await ShowErrorAsync(GetResource("QuickLookErrorMessage"));
+		}
+	}
+
+	internal bool HandleNativeSpaceKey(bool quickLookVisible)
+	{
+		if (IsTextInputFocused() || Browser is not DirectoryBrowserViewModel browser ||
+			selectedItems is not [LocalFileSystemItem item])
+		{
+			return false;
+		}
+
+		if (quickLookVisible)
+		{
+			QuickLookRestoreState restoreState = quickLookRestoreState is { } existingState &&
+				ReferenceEquals(existingState.Browser, browser) &&
+				string.Equals(existingState.Path, item.Path, StringComparison.Ordinal)
+					? existingState
+					: CaptureQuickLookRestoreState(browser, item.Path);
+			quickLookRestoreState = restoreState;
+			_ = ToggleQuickLookAsync(item);
+		}
+		else
+		{
+			quickLookRestoreState = CaptureQuickLookRestoreState(browser, item.Path);
+			_ = ToggleQuickLookAsync(item);
+		}
+		return true;
+	}
+
+	internal void HandleNativeQuickLookClosed()
+	{
+		if (quickLookRestoreState is not { } restoreState)
+		{
+			return;
+		}
+
+		quickLookRestoreState = null;
+		RestoreQuickLookSelection(restoreState);
+	}
+
+	private QuickLookRestoreState CaptureQuickLookRestoreState(
+		DirectoryBrowserViewModel browser,
+		string path)
+	{
+		FrameworkElement control = GetVisibleItemsControl(browser);
+		if (control is ItemsView itemsView &&
+			(itemsView.ScrollView ?? FindVisualDescendant<ScrollView>(itemsView)) is ScrollView scrollView)
+		{
+			return new(browser, path, control, scrollView.HorizontalOffset, scrollView.VerticalOffset, true, true);
+		}
+		if (FindVisualDescendant<ScrollViewer>(control) is ScrollViewer scrollViewer)
+		{
+			return new(browser, path, control, scrollViewer.HorizontalOffset, scrollViewer.VerticalOffset, false, true);
+		}
+
+		return new(browser, path, control, 0, 0, false, false);
+	}
+
+	private void RestoreQuickLookSelection(QuickLookRestoreState restoreState)
+	{
+		RestoreQuickLookSelection(restoreState, 0);
+	}
+
+	private void RestoreQuickLookSelection(QuickLookRestoreState restoreState, int attempt)
+	{
+		DispatcherQueue.TryEnqueue(() =>
+		{
+			DirectoryBrowserViewModel browser = restoreState.Browser;
+			if ((!ReferenceEquals(browser, ViewModel.ActiveTab?.Browser) &&
+				!ReferenceEquals(browser, ViewModel.ActiveTab?.SecondaryBrowser)) ||
+				!ReferenceEquals(restoreState.Control, GetVisibleItemsControl(browser)))
+			{
+				return;
+			}
+
+			LocalFileSystemItem? item = browser.Items.FirstOrDefault(item =>
+				string.Equals(item.Path, restoreState.Path, StringComparison.Ordinal));
+			if (item is null)
+			{
+				return;
+			}
+
+			FrameworkElement control = restoreState.Control;
+			bool isSelected = control switch
+			{
+				ItemsView view => view.SelectedItems.OfType<LocalFileSystemItem>().Contains(item),
+				ListViewBase list => list.SelectedItems.OfType<LocalFileSystemItem>().Contains(item),
+				_ => false,
+			};
+			if (!isSelected)
+			{
+				RestoreSelection(browser, control, [item]);
+			}
+			ActivateBrowser(browser, control);
+			control.UpdateLayout();
+			FocusQuickLookItem(browser, control, item);
+			RestoreQuickLookScrollPosition(restoreState);
+
+			DependencyObject? focusedElement = XamlRoot is { } xamlRoot
+				? FocusManager.GetFocusedElement(xamlRoot) as DependencyObject
+				: null;
+			if (attempt < 3 && (!IsDescendantOf(focusedElement, control) || attempt is 0))
+			{
+				RestoreQuickLookSelection(restoreState, attempt + 1);
+			}
+		});
+	}
+
+	private static bool FocusQuickLookItem(
+		DirectoryBrowserViewModel browser,
+		FrameworkElement control,
+		LocalFileSystemItem item)
+	{
+		Control? focusTarget = null;
+		if (control is ItemsView itemsView &&
+			FindVisualDescendant<ItemsRepeater>(itemsView) is ItemsRepeater repeater)
+		{
+			int index = browser.Items.IndexOf(item);
+			if (index >= 0)
+			{
+				focusTarget = repeater.TryGetElement(index) as Control;
+			}
+		}
+		else if (control is ListViewBase list)
+		{
+			focusTarget = list.ContainerFromItem(item) as Control;
+		}
+
+		return focusTarget?.Focus(FocusState.Keyboard) is true || control.Focus(FocusState.Keyboard);
+	}
+
+	private static void RestoreQuickLookScrollPosition(QuickLookRestoreState restoreState)
+	{
+		if (!restoreState.HasScrollPosition)
+		{
+			return;
+		}
+
+		if (restoreState.UsesScrollView && restoreState.Control is ItemsView itemsView &&
+			(itemsView.ScrollView ?? FindVisualDescendant<ScrollView>(itemsView)) is ScrollView scrollView)
+		{
+			scrollView.ScrollTo(
+				restoreState.HorizontalOffset,
+				restoreState.VerticalOffset,
+				new ScrollingScrollOptions(ScrollingAnimationMode.Disabled, ScrollingSnapPointsMode.Ignore));
+		}
+		else if (!restoreState.UsesScrollView &&
+			FindVisualDescendant<ScrollViewer>(restoreState.Control) is ScrollViewer scrollViewer)
+		{
+			scrollViewer.ChangeView(
+				restoreState.HorizontalOffset,
+				restoreState.VerticalOffset,
+				null,
+				disableAnimation: true);
+		}
+	}
+
 	private async void Page_PointerPressed(object sender, PointerRoutedEventArgs e)
 	{
 		switch (e.GetCurrentPoint(this).Properties.PointerUpdateKind)
@@ -1961,6 +2165,157 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private void AddressBar_DragOver(object sender, DragEventArgs e)
+	{
+		if (!ContainsDroppedPath(e.DataView))
+		{
+			return;
+		}
+
+		e.AcceptedOperation = DataPackageOperation.Link;
+		e.DragUIOverride.IsCaptionVisible = true;
+		e.DragUIOverride.Caption = GetResource("DropNavigateCaption");
+		e.Handled = true;
+	}
+
+	private async void AddressBar_Drop(object sender, DragEventArgs e)
+	{
+		if (Browser is not DirectoryBrowserViewModel browser || !ContainsDroppedPath(e.DataView))
+		{
+			return;
+		}
+
+		e.Handled = true;
+		var deferral = e.GetDeferral();
+		try
+		{
+			string? path = await GetDroppedPathAsync(e.DataView);
+			if (path is null)
+			{
+				return;
+			}
+
+			BeginAddressEdit();
+			AddressBox.Text = path;
+			AddressBox.SelectionStart = path.Length;
+			AddressBox.SelectionLength = 0;
+
+			if (File.Exists(path) || Directory.Exists(path))
+			{
+				await NavigateFromAddressAsync(browser, path);
+				return;
+			}
+
+			string? parentPath = Path.GetDirectoryName(path);
+			if (parentPath is not null && Directory.Exists(parentPath))
+			{
+				await browser.NavigateAsync(parentPath);
+				EndAddressEdit();
+				string itemName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+				browser.StatusText = string.Format(
+					GetResource("DroppedItemNotFoundFormat"),
+					string.IsNullOrEmpty(itemName) ? path : itemName);
+				return;
+			}
+
+			EndAddressEdit();
+			browser.StatusText = string.Format(GetResource("FolderNotFoundFormat"), parentPath ?? path);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or PathTooLongException)
+		{
+			EndAddressEdit();
+			browser.StatusText = ex.Message;
+		}
+		finally
+		{
+			deferral.Complete();
+		}
+	}
+
+	private static bool ContainsDroppedPath(DataPackageView dataView)
+	{
+		return dataView.Contains(StandardDataFormats.StorageItems) ||
+			dataView.Contains(StandardDataFormats.Text) ||
+			dataView.Contains("text/uri-list") ||
+			dataView.Contains("public.file-url");
+	}
+
+	private static async Task<string?> GetDroppedPathAsync(DataPackageView dataView)
+	{
+		if (dataView.Contains(StandardDataFormats.StorageItems))
+		{
+			IReadOnlyList<IStorageItem> items = await dataView.GetStorageItemsAsync();
+			string? storagePath = items
+				.Select(static item => item.Path)
+				.FirstOrDefault(static path => !string.IsNullOrWhiteSpace(path));
+			if (storagePath is not null)
+			{
+				return Path.GetFullPath(storagePath);
+			}
+		}
+
+		if (dataView.Contains(StandardDataFormats.Text) &&
+			NormalizeDroppedPath(await dataView.GetTextAsync()) is { } textPath)
+		{
+			return textPath;
+		}
+
+		foreach (string format in new[] { "text/uri-list", "public.file-url" })
+		{
+			if (NormalizeDroppedPath(await GetDroppedCustomTextAsync(dataView, format)) is { } customPath)
+			{
+				return customPath;
+			}
+		}
+
+		return null;
+	}
+
+	private static string? NormalizeDroppedPath(string? droppedText)
+	{
+		string? firstEntry = droppedText?
+			.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			.FirstOrDefault(static line => !line.StartsWith('#'));
+		if (string.IsNullOrWhiteSpace(firstEntry))
+		{
+			return null;
+		}
+
+		string candidate = firstEntry.Trim().Trim('"', '\'');
+		if (Uri.TryCreate(candidate, UriKind.Absolute, out Uri? uri) && uri.IsFile)
+		{
+			candidate = uri.LocalPath;
+		}
+		if (candidate.StartsWith("~/", StringComparison.Ordinal))
+		{
+			candidate = Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+				candidate[2..]);
+		}
+		if (!Path.IsPathFullyQualified(candidate))
+		{
+			return null;
+		}
+
+		return Path.GetFullPath(candidate);
+	}
+
+	private static async Task<string?> GetDroppedCustomTextAsync(DataPackageView dataView, string format)
+	{
+		if (!dataView.Contains(format))
+		{
+			return null;
+		}
+
+		object value = await dataView.GetDataAsync(format);
+		return value switch
+		{
+			string text => text,
+			Uri uri => uri.AbsoluteUri,
+			_ => null,
+		};
+	}
+
 	private async Task NavigateFromAddressAsync(DirectoryBrowserViewModel browser, string address)
 	{
 		string navigationPath = address;
@@ -1996,6 +2351,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				SelectAndRevealItem(browser, GetVisibleItemsControl(browser), index);
 			}
 		});
+	}
+
+	internal Task OpenExternalPathAsync(string path)
+	{
+		return Browser is DirectoryBrowserViewModel browser
+			? NavigateFromAddressAsync(browser, path)
+			: Task.CompletedTask;
 	}
 
 	private void AddressAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -2102,11 +2464,14 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 					}
 					: item.Title,
 				Tag = item.Path,
+				AllowDrop = true,
 				Style = (Style)Application.Current.Resources["BreadcrumbButtonStyle"],
 			};
 			Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, item.Title);
 			ToolTipService.SetToolTip(button, item.Title);
 			button.Click += BreadcrumbButton_Click;
+			button.DragOver += Breadcrumb_DragOver;
+			button.Drop += Breadcrumb_Drop;
 			BreadcrumbPanel.Children.Add(button);
 		}
 
@@ -3055,16 +3420,19 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		FileClipboardContent clipboard,
 		bool clearClipboardAfterMove,
 		FileConflictResolution? forcedConflictResolution = null,
-		IReadOnlyDictionary<string, string>? destinationNames = null)
+		IReadOnlyDictionary<string, string>? destinationNames = null,
+		DirectoryBrowserViewModel? targetBrowserOverride = null,
+		string? destinationDirectory = null)
 	{
-		if (Browser is null || fileTransferCancellation is not null || clipboard.Paths.Count is 0)
+		DirectoryBrowserViewModel? targetBrowser = targetBrowserOverride ?? Browser;
+		if (targetBrowser is null || fileTransferCancellation is not null || clipboard.Paths.Count is 0)
 		{
 			return;
 		}
 
-		DirectoryBrowserViewModel targetBrowser = Browser;
+		string targetDirectory = destinationDirectory ?? targetBrowser.CurrentPath;
 		FileConflictResolution conflictResolution = forcedConflictResolution ?? FileConflictResolution.KeepBoth;
-		if (forcedConflictResolution is null && HasDestinationConflicts(clipboard.Paths, targetBrowser.CurrentPath, clipboard.Mode))
+		if (forcedConflictResolution is null && HasDestinationConflicts(clipboard.Paths, targetDirectory, clipboard.Mode))
 		{
 			FileConflictResolution? selectedResolution = await ShowConflictResolutionAsync();
 			if (selectedResolution is null)
@@ -3101,7 +3469,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			FileTransferResult result = await FileTransferService.TransferAsync(
 				new FileTransferRequest(
 					clipboard.Paths,
-					targetBrowser.CurrentPath,
+					targetDirectory,
 					clipboard.Mode,
 					conflictResolution,
 					DestinationNames: destinationNames,
@@ -3436,13 +3804,136 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void Items_DragOver(object sender, DragEventArgs e)
 	{
-		if (e.DataView.Contains(StandardDataFormats.StorageItems) && fileTransferCancellation is null)
+		if (e.DataView.Contains(StandardDataFormats.StorageItems) &&
+			fileTransferCancellation is null &&
+			GetBrowserForItemsControl(sender) is DirectoryBrowserViewModel browser &&
+			!IsInvalidInternalDropTarget(e.DataView, browser.CurrentPath))
 		{
-			e.AcceptedOperation = DataPackageOperation.Copy;
+			FileTransferMode mode = GetDropTransferMode(e.DataView);
+			e.AcceptedOperation = GetDataPackageOperation(mode);
 			e.DragUIOverride.IsCaptionVisible = true;
-			e.DragUIOverride.Caption = GetResource("DropCopyCaption");
+			e.DragUIOverride.Caption = GetResource(mode is FileTransferMode.Move ? "DropMoveCaption" : "DropCopyCaption");
 			e.Handled = true;
 		}
+	}
+
+	private void FolderItem_DragOver(object sender, DragEventArgs e)
+	{
+		if (sender is not FrameworkElement { DataContext: LocalFileSystemItem { IsNavigableDirectory: true } folder } ||
+			GetBrowserForItem(folder) is not DirectoryBrowserViewModel browser ||
+			IsTrashPath(browser.CurrentPath) ||
+			!Directory.Exists(folder.Path) ||
+			!e.DataView.Contains(StandardDataFormats.StorageItems) ||
+			IsInvalidInternalDropTarget(e.DataView, folder.Path) ||
+			fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		FileTransferMode mode = GetDropTransferMode(e.DataView);
+		e.AcceptedOperation = GetDataPackageOperation(mode);
+		e.DragUIOverride.IsCaptionVisible = true;
+		e.DragUIOverride.Caption = string.Format(
+			GetResource(mode is FileTransferMode.Move ? "DropMoveToFolderCaptionFormat" : "DropCopyToFolderCaptionFormat"),
+			folder.Name);
+		e.Handled = true;
+	}
+
+	private async void FolderItem_Drop(object sender, DragEventArgs e)
+	{
+		if (sender is not FrameworkElement { DataContext: LocalFileSystemItem { IsNavigableDirectory: true } folder } ||
+			GetBrowserForItem(folder) is not DirectoryBrowserViewModel browser ||
+			IsTrashPath(browser.CurrentPath) ||
+			!Directory.Exists(folder.Path) ||
+			!e.DataView.Contains(StandardDataFormats.StorageItems) ||
+			IsInvalidInternalDropTarget(e.DataView, folder.Path) ||
+			fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		e.Handled = true;
+		ActivateBrowser(browser, GetVisibleItemsControl(browser));
+		await HandleItemsDropAsync(e, browser, folder.Path);
+	}
+
+	private void SidebarLocation_DragOver(object sender, DragEventArgs e)
+	{
+		if (sender is not FrameworkElement { DataContext: SidebarLocation { IsHeader: false } location } ||
+			Browser is not DirectoryBrowserViewModel ||
+			string.IsNullOrWhiteSpace(location.Path) ||
+			IsTrashPath(location.Path) ||
+			!Directory.Exists(location.Path) ||
+			!e.DataView.Contains(StandardDataFormats.StorageItems) ||
+			IsInvalidInternalDropTarget(e.DataView, location.Path) ||
+			fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		SetFolderDropFeedback(e, location.Name);
+	}
+
+	private async void SidebarLocation_Drop(object sender, DragEventArgs e)
+	{
+		if (sender is not FrameworkElement { DataContext: SidebarLocation { IsHeader: false } location } ||
+			Browser is not DirectoryBrowserViewModel browser ||
+			string.IsNullOrWhiteSpace(location.Path) ||
+			IsTrashPath(location.Path) ||
+			!Directory.Exists(location.Path) ||
+			!e.DataView.Contains(StandardDataFormats.StorageItems) ||
+			IsInvalidInternalDropTarget(e.DataView, location.Path) ||
+			fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		e.Handled = true;
+		await HandleItemsDropAsync(e, browser, location.Path);
+	}
+
+	private void Breadcrumb_DragOver(object sender, DragEventArgs e)
+	{
+		if (sender is not Button { Tag: string path } button ||
+			Browser is not DirectoryBrowserViewModel ||
+			IsTrashPath(path) ||
+			!Directory.Exists(path) ||
+			!e.DataView.Contains(StandardDataFormats.StorageItems) ||
+			IsInvalidInternalDropTarget(e.DataView, path) ||
+			fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		SetFolderDropFeedback(e, ToolTipService.GetToolTip(button) as string ?? Path.GetFileName(path));
+	}
+
+	private async void Breadcrumb_Drop(object sender, DragEventArgs e)
+	{
+		if (sender is not Button { Tag: string path } ||
+			Browser is not DirectoryBrowserViewModel browser ||
+			IsTrashPath(path) ||
+			!Directory.Exists(path) ||
+			!e.DataView.Contains(StandardDataFormats.StorageItems) ||
+			IsInvalidInternalDropTarget(e.DataView, path) ||
+			fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		e.Handled = true;
+		await HandleItemsDropAsync(e, browser, path);
+	}
+
+	private void SetFolderDropFeedback(DragEventArgs e, string folderName)
+	{
+		FileTransferMode mode = GetDropTransferMode(e.DataView);
+		e.AcceptedOperation = GetDataPackageOperation(mode);
+		e.DragUIOverride.IsCaptionVisible = true;
+		e.DragUIOverride.Caption = string.Format(
+			GetResource(mode is FileTransferMode.Move ? "DropMoveToFolderCaptionFormat" : "DropCopyToFolderCaptionFormat"),
+			folderName);
+		e.Handled = true;
 	}
 
 	private void Items_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
@@ -3519,6 +4010,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		});
 		string[] fileUris = paths.Select(static path => new Uri(path).AbsoluteUri).ToArray();
 		data.SetText(string.Join(Environment.NewLine, paths));
+		data.SetData(InternalFileDragFormat, JsonSerializer.Serialize(paths));
 		data.SetData("text/uri-list", string.Join("\r\n", fileUris));
 		data.SetData("public.file-url", fileUris[0]);
 		if (prepareNativeDrag)
@@ -3536,25 +4028,43 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
+		if (GetBrowserForItemsControl(sender) is not DirectoryBrowserViewModel browser)
+		{
+			return;
+		}
+
+		e.Handled = true;
+		ActivateBrowser(browser, sender as FrameworkElement);
+		await HandleItemsDropAsync(e, browser, browser.CurrentPath);
+	}
+
+	private async Task HandleItemsDropAsync(
+		DragEventArgs e,
+		DirectoryBrowserViewModel targetBrowser,
+		string destinationDirectory)
+	{
 		var deferral = e.GetDeferral();
 		try
 		{
-			if (GetBrowserForItemsControl(sender) is DirectoryBrowserViewModel browser)
-			{
-				ActivateBrowser(browser, sender as FrameworkElement);
-			}
-
-			var storageItems = await e.DataView.GetStorageItemsAsync();
+			IReadOnlyList<IStorageItem> storageItems = await e.DataView.GetStorageItemsAsync();
 			string[] paths = storageItems
 				.Select(static item => item.Path)
 				.Where(static path => !string.IsNullOrWhiteSpace(path))
+				.Distinct(StringComparer.Ordinal)
 				.ToArray();
 			if (paths.Length is 0)
 			{
 				return;
 			}
 
-			await TransferItemsAsync(new FileClipboardContent(paths, FileTransferMode.Copy, 0), clearClipboardAfterMove: false);
+			FileTransferMode mode = GetDropTransferMode(e.DataView);
+			e.AcceptedOperation = GetDataPackageOperation(mode);
+			await TransferItemsAsync(
+				new FileClipboardContent(paths, mode, 0),
+				clearClipboardAfterMove: false,
+				targetBrowserOverride: targetBrowser,
+				destinationDirectory: destinationDirectory);
+			await RefreshDropBrowsersAsync(paths, destinationDirectory, mode, targetBrowser);
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 		{
@@ -3563,6 +4073,69 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		finally
 		{
 			deferral.Complete();
+		}
+	}
+
+	private static FileTransferMode GetDropTransferMode(DataPackageView dataView)
+	{
+		if (IsKeyDown(VirtualKey.Control) || IsKeyDown(VirtualKey.Menu))
+		{
+			return FileTransferMode.Copy;
+		}
+		if (IsInternalFileDrag(dataView))
+		{
+			return FileTransferMode.Move;
+		}
+
+		DataPackageOperation requestedOperation = dataView.RequestedOperation;
+		return requestedOperation.HasFlag(DataPackageOperation.Move) &&
+			!requestedOperation.HasFlag(DataPackageOperation.Copy)
+				? FileTransferMode.Move
+				: FileTransferMode.Copy;
+	}
+
+	private static DataPackageOperation GetDataPackageOperation(FileTransferMode mode) =>
+		mode is FileTransferMode.Move ? DataPackageOperation.Move : DataPackageOperation.Copy;
+
+	private static bool IsInternalFileDrag(DataPackageView dataView) =>
+		dataView.Contains(InternalFileDragFormat) || MacOSNativeMethods.HasActiveFileDrag() is not 0;
+
+	private bool IsInvalidInternalDropTarget(DataPackageView dataView, string destinationDirectory)
+	{
+		return dataView.Contains(InternalFileDragFormat) && selectedItems.Any(item =>
+			item.IsDirectory && IsSameOrDescendantPath(destinationDirectory, item.Path));
+	}
+
+	private async Task RefreshDropBrowsersAsync(
+		IReadOnlyList<string> sourcePaths,
+		string destinationDirectory,
+		FileTransferMode mode,
+		DirectoryBrowserViewModel targetBrowser)
+	{
+		var refreshDirectories = new HashSet<string>(StringComparer.Ordinal)
+		{
+			Path.GetFullPath(destinationDirectory),
+		};
+		if (mode is FileTransferMode.Move)
+		{
+			foreach (string? sourceDirectory in sourcePaths.Select(Path.GetDirectoryName))
+			{
+				if (!string.IsNullOrWhiteSpace(sourceDirectory))
+				{
+					refreshDirectories.Add(Path.GetFullPath(sourceDirectory));
+				}
+			}
+		}
+		DirectoryBrowserViewModel[] sourceBrowsers = ViewModel.Tabs
+			.SelectMany(static tab => new DirectoryBrowserViewModel?[] { tab.Browser, tab.SecondaryBrowser })
+			.OfType<DirectoryBrowserViewModel>()
+			.Where(browser => !ReferenceEquals(browser, targetBrowser) &&
+				refreshDirectories.Contains(browser.CurrentPath))
+			.Distinct()
+			.ToArray();
+		foreach (DirectoryBrowserViewModel browser in sourceBrowsers)
+		{
+			await browser.RefreshAsync();
 		}
 	}
 
@@ -4436,33 +5009,26 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
-	private async void Items_KeyDown(object sender, KeyRoutedEventArgs e)
+	private void Items_KeyDown(object sender, KeyRoutedEventArgs e)
 	{
 		if (GetBrowserForItemsControl(sender) is not DirectoryBrowserViewModel browser)
 		{
 			return;
 		}
 		ActivateBrowser(browser, sender as FrameworkElement);
+		if (e.Key is VirtualKey.Space)
+		{
+			if (selectedItems is [LocalFileSystemItem item])
+			{
+				e.Handled = true;
+				_ = ToggleQuickLookAsync(item);
+			}
+			return;
+		}
 
 		if (TryTypeSelect(browser, sender as FrameworkElement, e.Key))
 		{
 			e.Handled = true;
-			return;
-		}
-
-		if (e.Key is not VirtualKey.Space || selectedItems is not [LocalFileSystemItem item])
-		{
-			return;
-		}
-
-		e.Handled = true;
-		try
-		{
-			await WorkspaceService.PreviewAsync(item.Path);
-		}
-		catch (IOException)
-		{
-			await ShowErrorAsync(GetResource("QuickLookErrorMessage"));
 		}
 	}
 
@@ -4568,6 +5134,29 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		ActivateBrowser(browser, control);
 	}
 
+	private void SelectAndRevealPath(DirectoryBrowserViewModel browser, string path)
+	{
+		DispatcherQueue.TryEnqueue(() =>
+		{
+			if (!ReferenceEquals(browser, ViewModel.ActiveTab?.Browser) &&
+				!ReferenceEquals(browser, ViewModel.ActiveTab?.SecondaryBrowser))
+			{
+				return;
+			}
+
+			int index = Enumerable.Range(0, browser.Items.Count)
+				.FirstOrDefault(index => string.Equals(browser.Items[index].Path, path, StringComparison.Ordinal), -1);
+			if (index < 0)
+			{
+				return;
+			}
+
+			FrameworkElement control = GetVisibleItemsControl(browser);
+			control.UpdateLayout();
+			SelectAndRevealItem(browser, control, index);
+		});
+	}
+
 	private static void RevealGridItem(ItemsView view, int index)
 	{
 		ScrollView? scrollView = view.ScrollView ?? FindVisualDescendant<ScrollView>(view);
@@ -4591,7 +5180,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private async void NewButton_Click(object sender, RoutedEventArgs e)
 	{
-		if (Browser is null)
+		if (Browser is not DirectoryBrowserViewModel targetBrowser)
 		{
 			return;
 		}
@@ -4609,9 +5198,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 		try
 		{
-			string path = await FileOperationService.CreateFolderAsync(Browser.CurrentPath, input.Text.Trim());
+			string path = await FileOperationService.CreateFolderAsync(targetBrowser.CurrentPath, input.Text.Trim());
 			RecordCreatedItemHistory(path, isDirectory: true);
-			await Browser.RefreshAsync();
+			await targetBrowser.RefreshAsync();
+			SelectAndRevealPath(targetBrowser, path);
 		}
 		catch (FileOperationException ex)
 		{
@@ -5134,7 +5724,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private async void NewTextFileButton_Click(object sender, RoutedEventArgs e)
 	{
-		if (Browser is null)
+		if (Browser is not DirectoryBrowserViewModel targetBrowser)
 		{
 			return;
 		}
@@ -5151,9 +5741,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 		try
 		{
-			string path = await FileOperationService.CreateFileAsync(Browser.CurrentPath, input.Text.Trim());
+			string path = await FileOperationService.CreateFileAsync(targetBrowser.CurrentPath, input.Text.Trim());
 			RecordCreatedItemHistory(path, isDirectory: false);
-			await Browser.RefreshAsync();
+			await targetBrowser.RefreshAsync();
+			SelectAndRevealPath(targetBrowser, path);
 		}
 		catch (FileOperationException ex)
 		{
@@ -6084,8 +6675,45 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			for (int column = 0; column < 3; column++)
 			{
 				int index = row * 3 + column;
-				CheckBox toggle = CreateToggleCheckBox(mode.HasFlag(flags[index]), out FrameworkElement toggleHost);
-				Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, $"{rowLabels[row]} {columnLabels[column + 1]}");
+				var toggle = new CheckBox
+				{
+					IsChecked = mode.HasFlag(flags[index]),
+				};
+				var toggleHost = new Button
+				{
+					Width = 22,
+					Height = 22,
+					MinWidth = 0,
+					MinHeight = 0,
+					Padding = new Thickness(0),
+					BorderThickness = new Thickness(1),
+					CornerRadius = new CornerRadius(4),
+					HorizontalAlignment = HorizontalAlignment.Center,
+					VerticalAlignment = VerticalAlignment.Center,
+					FontSize = 14,
+					FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+				};
+				void UpdateToggleVisual()
+				{
+					bool isChecked = toggle.IsChecked is true;
+					toggleHost.Content = isChecked ? "✓" : string.Empty;
+					toggleHost.Background = isChecked
+						? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
+						: new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+					toggleHost.BorderBrush = isChecked
+						? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
+						: (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+					toggleHost.Foreground = isChecked
+						? new SolidColorBrush(Microsoft.UI.Colors.White)
+						: new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+				}
+				toggleHost.Click += (_, _) =>
+				{
+					toggle.IsChecked = toggle.IsChecked is not true;
+					UpdateToggleVisual();
+				};
+				Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggleHost, $"{rowLabels[row]} {columnLabels[column + 1]}");
+				UpdateToggleVisual();
 				Grid.SetRow(toggleHost, row + 1);
 				Grid.SetColumn(toggleHost, column + 1);
 				grid.Children.Add(toggleHost);
@@ -6630,17 +7258,35 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
-		IReadOnlyList<LocalFileSystemItem> selection = selectedItems;
+		IReadOnlyList<LocalFileSystemItem> selection = selectedItems.Where(browser.Items.Contains).ToArray();
 		browser.IsGridView = isGridView;
 		FrameworkElement targetControl = GetVisibleItemsControl(browser);
 		RestoreSelection(browser, targetControl, selection);
 		ActivateBrowser(browser, targetControl);
-		ResetItemsScrollPosition(targetControl);
+		if (selection.Count is 0)
+		{
+			ResetItemsScrollPosition(targetControl);
+		}
 		DispatcherQueue.TryEnqueue(() =>
 		{
 			FrameworkElement visibleControl = GetVisibleItemsControl(browser);
 			visibleControl.UpdateLayout();
-			ResetItemsScrollPosition(visibleControl);
+			RestoreSelection(browser, visibleControl, selection);
+			if (!RevealSelection(browser, visibleControl, selection))
+			{
+				ResetItemsScrollPosition(visibleControl);
+			}
+			ActivateBrowser(browser, visibleControl);
+			DispatcherQueue.TryEnqueue(() =>
+			{
+				FrameworkElement settledControl = GetVisibleItemsControl(browser);
+				settledControl.UpdateLayout();
+				RestoreSelection(browser, settledControl, selection);
+				if (!RevealSelection(browser, settledControl, selection))
+				{
+					ResetItemsScrollPosition(settledControl);
+				}
+			});
 		});
 	}
 
@@ -6796,6 +7442,25 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		return secondaryBrowser?.Items.Contains(item) is true ? secondaryBrowser : ViewModel.ActiveTab?.Browser;
 	}
 
+	private void ThumbnailItem_Loaded(object sender, RoutedEventArgs e)
+	{
+		EnsureThumbnailLoaded(sender as FrameworkElement);
+	}
+
+	private void ThumbnailItem_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+	{
+		EnsureThumbnailLoaded(sender);
+	}
+
+	private void EnsureThumbnailLoaded(FrameworkElement? element)
+	{
+		if (element is { DataContext: LocalFileSystemItem item } &&
+			GetBrowserForItem(item) is DirectoryBrowserViewModel browser)
+		{
+			browser.EnsureThumbnailLoaded(item);
+		}
+	}
+
 	private FrameworkElement GetVisibleItemsControl(DirectoryBrowserViewModel browser)
 	{
 		bool isSecondary = ReferenceEquals(browser, ViewModel.ActiveTab?.SecondaryBrowser);
@@ -6848,6 +7513,29 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				list.SelectedItems.Add(item);
 			}
 		}
+	}
+
+	private static bool RevealSelection(
+		DirectoryBrowserViewModel browser,
+		FrameworkElement control,
+		IReadOnlyList<LocalFileSystemItem> selection)
+	{
+		LocalFileSystemItem? item = selection.FirstOrDefault(browser.Items.Contains);
+		if (item is null)
+		{
+			return false;
+		}
+
+		int index = browser.Items.IndexOf(item);
+		if (control is ItemsView view)
+		{
+			RevealGridItem(view, index);
+		}
+		else if (control is ListViewBase list)
+		{
+			list.ScrollIntoView(item);
+		}
+		return true;
 	}
 
 	private void UpdatePaneVisuals()
@@ -7280,7 +7968,14 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 
 		lastScrollPaths[browser] = browser.CurrentPath;
-		DispatcherQueue.TryEnqueue(() => ResetItemsScrollPosition(GetVisibleItemsControl(browser)));
+		bool isSecondary = ReferenceEquals(browser, ViewModel.ActiveTab?.SecondaryBrowser);
+		FrameworkElement gridControl = isSecondary ? SecondaryGridItems : GridItems;
+		FrameworkElement detailsControl = isSecondary ? SecondaryDetailsItems : DetailsItems;
+		DispatcherQueue.TryEnqueue(() =>
+		{
+			ResetItemsScrollPosition(gridControl);
+			ResetItemsScrollPosition(detailsControl);
+		});
 	}
 
 	private void RecordRecentLocation()

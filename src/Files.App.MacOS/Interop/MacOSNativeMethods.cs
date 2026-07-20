@@ -64,6 +64,9 @@ internal static partial class MacOSNativeMethods
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_prepare_file_drag", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial int PrepareFileDrag(string pathsJson);
 
+	[LibraryImport(LibraryName, EntryPoint = "files_macos_has_active_file_drag")]
+	internal static partial int HasActiveFileDrag();
+
 	[LibraryImport(LibraryName, EntryPoint = "files_macos_announce_accessibility", StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial int AnnounceAccessibility(string announcement, int highPriority);
 

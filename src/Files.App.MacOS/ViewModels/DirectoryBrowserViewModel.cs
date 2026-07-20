@@ -45,6 +45,8 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 	private readonly object thumbnailCacheLock = new();
 	private readonly Dictionary<ThumbnailCacheKey, ImageSource> thumbnailCache = [];
 	private readonly Queue<ThumbnailCacheKey> thumbnailCacheOrder = [];
+	private readonly HashSet<LocalFileSystemItem> pendingThumbnailLoads = [];
+	private readonly SemaphoreSlim thumbnailConcurrency = new(4);
 	private CancellationTokenSource? navigationCancellation;
 	private CancellationTokenSource? searchCancellation;
 	private CancellationTokenSource? thumbnailCancellation;
@@ -168,8 +170,8 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 				return;
 			}
 
+			StartThumbnailLoading();
 			ReplaceItems(items);
-			StartThumbnailLoading(Items);
 			StartMetadataEnrichment(Items);
 
 			if (addToHistory && !string.Equals(previousPath, fullPath, StringComparison.Ordinal))
@@ -286,6 +288,7 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 
 		var cancellation = new CancellationTokenSource();
 		searchCancellation = cancellation;
+		StartThumbnailLoading();
 		string rootPath = CurrentPath;
 		var incrementalItems = new Dictionary<string, LocalFileSystemItem>(StringComparer.Ordinal);
 		bool searchCompleted = false;
@@ -327,7 +330,6 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 			}
 
 			ReplaceItems(results);
-			StartThumbnailLoading(Items);
 			itemCountStatus = string.Format(GetResource("SearchResultCountFormat"), Items.Count);
 			StatusText = itemCountStatus;
 		}
@@ -488,6 +490,7 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 		metadataCancellation = null;
 		lock (thumbnailCacheLock)
 		{
+			pendingThumbnailLoads.Clear();
 			thumbnailCache.Clear();
 			thumbnailCacheOrder.Clear();
 		}
@@ -524,7 +527,7 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 		});
 	}
 
-	private void StartThumbnailLoading(IReadOnlyList<LocalFileSystemItem> items)
+	private void StartThumbnailLoading()
 	{
 		if (isDisposed)
 		{
@@ -535,7 +538,25 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 		thumbnailCancellation?.Dispose();
 		var cancellation = new CancellationTokenSource();
 		thumbnailCancellation = cancellation;
-		_ = LoadThumbnailsAsync(items.Take(120).ToArray(), cancellation);
+	}
+
+	internal void EnsureThumbnailLoaded(LocalFileSystemItem item)
+	{
+		CancellationTokenSource? cancellation = thumbnailCancellation;
+		if (isDisposed || item.Thumbnail is not null || cancellation is null || cancellation.IsCancellationRequested)
+		{
+			return;
+		}
+
+		lock (thumbnailCacheLock)
+		{
+			if (item.Thumbnail is not null || !pendingThumbnailLoads.Add(item))
+			{
+				return;
+			}
+		}
+
+		_ = LoadThumbnailOnDemandAsync(item, cancellation.Token);
 	}
 
 	private void StartMetadataEnrichment(IReadOnlyList<LocalFileSystemItem> items)
@@ -626,22 +647,20 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 		}
 	}
 
-	private async Task LoadThumbnailsAsync(IReadOnlyList<LocalFileSystemItem> items, CancellationTokenSource cancellation)
+	private async Task LoadThumbnailOnDemandAsync(LocalFileSystemItem item, CancellationToken cancellationToken)
 	{
-		using var concurrency = new SemaphoreSlim(4);
 		try
 		{
-			await Task.WhenAll(items.Select(item => LoadThumbnailAsync(item, concurrency, cancellation.Token)));
+			await LoadThumbnailAsync(item, thumbnailConcurrency, cancellationToken);
 		}
 		catch (OperationCanceledException)
 		{
 		}
 		finally
 		{
-			if (ReferenceEquals(thumbnailCancellation, cancellation))
+			lock (thumbnailCacheLock)
 			{
-				thumbnailCancellation = null;
-				cancellation.Dispose();
+				pendingThumbnailLoads.Remove(item);
 			}
 		}
 	}
