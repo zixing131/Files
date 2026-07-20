@@ -18,6 +18,7 @@ public partial class App : Application, IMacOSMenuCommandTarget
 	private readonly Dictionary<Window, WindowPlacementState?> pendingWindowPlacements = [];
 	private readonly Dictionary<Window, WindowPlacementState?> lastKnownWindowPlacements = [];
 	private readonly MacOSMainMenuService mainMenuService = new();
+	private readonly MacOSFileManagerIntegrationService fileManagerIntegrationService = new();
 	private MacOSAuxiliaryMouseService? auxiliaryMouseService;
 	private MainPage? activePage;
 	private WorkspaceState? lastClosedWorkspace;
@@ -43,6 +44,28 @@ public partial class App : Application, IMacOSMenuCommandTarget
 	protected override void OnLaunched(LaunchActivatedEventArgs args)
 	{
 		MainWindow = CreateWindow(restoreWorkspace: true);
+		if (activePage is not null)
+		{
+			fileManagerIntegrationService.Install(activePage.DispatcherQueue, OpenPathsFromSystemAsync);
+		}
+	}
+
+	private async Task OpenPathsFromSystemAsync(IReadOnlyList<string> paths)
+	{
+		string? path = paths.FirstOrDefault(static path => !string.IsNullOrWhiteSpace(path));
+		if (path is null || (!File.Exists(path) && !Directory.Exists(path)))
+		{
+			return;
+		}
+
+		MainPage? page = activePage ?? windows.Values.FirstOrDefault();
+		if (page is null)
+		{
+			Window window = CreateWindow();
+			page = windows[window];
+		}
+		await page.InitializationTask;
+		await page.OpenExternalPathAsync(path);
 	}
 
 	internal MacOSMainMenuService MainMenuService => mainMenuService;
@@ -84,7 +107,9 @@ public partial class App : Application, IMacOSMenuCommandTarget
 		auxiliaryMouseService ??= new(
 			page.DispatcherQueue,
 			buttonNumber => activePage?.HandleAuxiliaryMouseButton(buttonNumber),
-			(deltaX, deltaY, hasPreciseDeltas) => activePage?.HandleNativeScrollWheel(deltaX, deltaY, hasPreciseDeltas) is true);
+			(deltaX, deltaY, hasPreciseDeltas) => activePage?.HandleNativeScrollWheel(deltaX, deltaY, hasPreciseDeltas) is true,
+			quickLookVisible => activePage?.HandleNativeSpaceKey(quickLookVisible) is true,
+			() => activePage?.HandleNativeQuickLookClosed());
 
 		activePage = page;
 		window.Activate();

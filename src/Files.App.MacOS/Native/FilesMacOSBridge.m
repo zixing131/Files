@@ -44,6 +44,8 @@ typedef void (*FilesMenuCommandCallback)(void *context, int command);
 typedef int (*FilesMenuValidationCallback)(void *context, int command);
 typedef void (*FilesAuxiliaryMouseCallback)(void *context, int buttonNumber);
 typedef int (*FilesScrollWheelCallback)(void *context, double deltaX, double deltaY, int hasPreciseDeltas);
+typedef int (*FilesSpaceKeyCallback)(void *context, int quickLookVisible);
+typedef void (*FilesOpenPathsCallback)(void *context, const char *pathsJson);
 
 @interface FilesMenuTarget : NSObject <NSMenuItemValidation>
 @property(nonatomic, assign) FilesMenuCommandCallback executeCallback;
@@ -69,6 +71,82 @@ typedef int (*FilesScrollWheelCallback)(void *context, double deltaX, double del
 
 @end
 
+@interface FilesServicesProvider : NSObject
+@property(nonatomic, assign) FilesOpenPathsCallback openPathsCallback;
+@property(nonatomic, assign) void *callbackContext;
+- (void)openInFiles:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error;
+- (void)handleOpenDocumentsEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
+- (void)sendURLsToFiles:(NSArray<NSURL *> *)urls error:(NSString **)error;
+@end
+
+@implementation FilesServicesProvider
+
+- (void)openInFiles:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error
+{
+	NSArray<NSURL *> *urls = [pasteboard
+		readObjectsForClasses:@[ NSURL.class ]
+		options:@{ NSPasteboardURLReadingFileURLsOnlyKey: @YES }];
+	[self sendURLsToFiles:urls error:error];
+}
+
+- (void)handleOpenDocumentsEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
+{
+	NSAppleEventDescriptor *items = [event paramDescriptorForKeyword:keyDirectObject];
+	NSMutableArray<NSURL *> *urls = [NSMutableArray array];
+	for (NSInteger index = 1; index <= items.numberOfItems; index++)
+	{
+		NSAppleEventDescriptor *item = [items descriptorAtIndex:index];
+		NSAppleEventDescriptor *fileURL = [item coerceToDescriptorType:typeFileURL];
+		NSURL *url = fileURL.stringValue.length > 0 ? [NSURL URLWithString:fileURL.stringValue] : nil;
+		if (url.isFileURL)
+		{
+			[urls addObject:url];
+		}
+	}
+	[self sendURLsToFiles:urls error:nil];
+}
+
+- (void)sendURLsToFiles:(NSArray<NSURL *> *)urls error:(NSString **)error
+{
+	NSMutableArray<NSString *> *paths = [NSMutableArray array];
+	for (NSURL *url in urls)
+	{
+		if (url.isFileURL && url.path.length > 0)
+		{
+			[paths addObject:url.path];
+		}
+	}
+
+	if (paths.count == 0)
+	{
+		if (error != NULL)
+		{
+			*error = @"Files didn't receive a valid file or folder.";
+		}
+		return;
+	}
+
+	NSError *jsonError = nil;
+	NSData *jsonData = [NSJSONSerialization dataWithJSONObject:paths options:0 error:&jsonError];
+	if (jsonData == nil)
+	{
+		if (error != NULL)
+		{
+			*error = jsonError.localizedDescription ?: @"Files couldn't read the selected items.";
+		}
+		return;
+	}
+
+	NSString *json = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+	if (self.openPathsCallback != NULL && json != nil)
+	{
+		self.openPathsCallback(self.callbackContext, json.UTF8String);
+		[NSApp activateIgnoringOtherApps:YES];
+	}
+}
+
+@end
+
 static void files_macos_finish_file_drag(void);
 
 @interface FilesFileDraggingSource : NSObject <NSDraggingSource>
@@ -78,12 +156,12 @@ static void files_macos_finish_file_drag(void);
 
 - (NSDragOperation)draggingSession:(NSDraggingSession *)session sourceOperationMaskForDraggingContext:(NSDraggingContext)context
 {
-	return NSDragOperationCopy;
+	return NSDragOperationCopy | NSDragOperationMove;
 }
 
 - (BOOL)ignoreModifierKeysForDraggingSession:(NSDraggingSession *)session
 {
-	return YES;
+	return NO;
 }
 
 - (void)draggingSession:(NSDraggingSession *)session endedAtPoint:(NSPoint)screenPoint operation:(NSDragOperation)operation
@@ -94,8 +172,11 @@ static void files_macos_finish_file_drag(void);
 @end
 
 static FilesQuickLookDataSource *quickLookDataSource;
+static __weak NSWindow *quickLookOwnerWindow;
+static __weak NSResponder *quickLookOwnerFirstResponder;
 static NSSharingServicePicker *sharingServicePicker;
 static FilesMenuTarget *mainMenuTarget;
+static FilesServicesProvider *fileManagerServicesProvider;
 static FilesFileDraggingSource *fileDraggingSource;
 static NSArray<NSString *> *pendingFileDragPaths;
 static NSWindow *pendingFileDragWindow;
@@ -126,6 +207,11 @@ static void files_macos_finish_file_drag(void)
 		[NSApp postEvent:mouseUp atStart:YES];
 		[window invalidateCursorRectsForView:window.contentView];
 	});
+}
+
+__attribute__((visibility("default"))) int files_macos_has_active_file_drag(void)
+{
+	return activeFileDragWindow == nil ? 0 : 1;
 }
 
 __attribute__((visibility("default"))) void files_macos_set_horizontal_resize_cursor(int isEnabled)
@@ -325,6 +411,7 @@ __attribute__((visibility("default"))) int files_macos_register_symbol_font(void
 static id auxiliaryMouseMonitor;
 static FilesAuxiliaryMouseCallback auxiliaryMouseCallback;
 static FilesScrollWheelCallback scrollWheelCallback;
+static FilesSpaceKeyCallback spaceKeyCallback;
 static void *auxiliaryMouseCallbackContext;
 static atomic_bool mainMenuInstalled;
 static atomic_bool gridScrollCaptureEnabled;
@@ -341,6 +428,7 @@ static NSString *const FilesMetadataItemUserTagsKey = @"kMDItemUserTags";
 __attribute__((visibility("default"))) void files_macos_install_auxiliary_mouse_handler(
 	FilesAuxiliaryMouseCallback callback,
 	FilesScrollWheelCallback scrollCallback,
+	FilesSpaceKeyCallback keyCallback,
 	void *callbackContext)
 {
 	dispatch_async(dispatch_get_main_queue(), ^{
@@ -351,13 +439,14 @@ __attribute__((visibility("default"))) void files_macos_install_auxiliary_mouse_
 		}
 		auxiliaryMouseCallback = callback;
 		scrollWheelCallback = scrollCallback;
+		spaceKeyCallback = keyCallback;
 		auxiliaryMouseCallbackContext = callbackContext;
-		if (callback == NULL && scrollCallback == NULL)
+		if (callback == NULL && scrollCallback == NULL && keyCallback == NULL)
 		{
 			return;
 		}
 
-		NSEventMask eventMask = NSEventMaskOtherMouseDown | NSEventMaskScrollWheel;
+		NSEventMask eventMask = NSEventMaskOtherMouseDown | NSEventMaskScrollWheel | NSEventMaskKeyDown;
 		auxiliaryMouseMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:eventMask handler:^NSEvent *(NSEvent *event) {
 			if (event.type == NSEventTypeOtherMouseDown)
 			{
@@ -377,6 +466,18 @@ __attribute__((visibility("default"))) void files_macos_install_auxiliary_mouse_
 			{
 				return nil;
 			}
+			else if (event.type == NSEventTypeKeyDown && event.keyCode == 49 && !event.isARepeat && spaceKeyCallback != NULL)
+			{
+				NSEventModifierFlags modifiers = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+				NSEventModifierFlags commandModifiers =
+					NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption;
+				BOOL quickLookVisible = [QLPreviewPanel sharedPreviewPanelExists] && [QLPreviewPanel sharedPreviewPanel].isVisible;
+				if ((modifiers & commandModifiers) == 0 &&
+					spaceKeyCallback(auxiliaryMouseCallbackContext, quickLookVisible ? 1 : 0) != 0)
+				{
+					return nil;
+				}
+			}
 			return event;
 		}];
 	});
@@ -392,6 +493,7 @@ __attribute__((visibility("default"))) void files_macos_uninstall_auxiliary_mous
 		}
 		auxiliaryMouseCallback = NULL;
 		scrollWheelCallback = NULL;
+		spaceKeyCallback = NULL;
 		auxiliaryMouseCallbackContext = NULL;
 	});
 }
@@ -906,6 +1008,47 @@ __attribute__((visibility("default"))) void files_macos_uninstall_main_menu(void
 	atomic_store(&mainMenuInstalled, false);
 	atomic_store(&mainMenuRootCount, 0);
 	atomic_store(&mainMenuCommandCount, 0);
+}
+
+__attribute__((visibility("default"))) void files_macos_install_file_manager_services(
+	FilesOpenPathsCallback openPathsCallback,
+	void *callbackContext)
+{
+	void (^installBlock)(void) = ^{
+		fileManagerServicesProvider = [FilesServicesProvider new];
+		fileManagerServicesProvider.openPathsCallback = openPathsCallback;
+		fileManagerServicesProvider.callbackContext = callbackContext;
+		NSApp.servicesProvider = fileManagerServicesProvider;
+		[[NSAppleEventManager sharedAppleEventManager]
+			setEventHandler:fileManagerServicesProvider
+			andSelector:@selector(handleOpenDocumentsEvent:withReplyEvent:)
+			forEventClass:kCoreEventClass
+			andEventID:kAEOpenDocuments];
+		NSUpdateDynamicServices();
+	};
+
+	if ([NSThread isMainThread])
+	{
+		installBlock();
+	}
+	else
+	{
+		dispatch_async(dispatch_get_main_queue(), installBlock);
+	}
+}
+
+__attribute__((visibility("default"))) void files_macos_uninstall_file_manager_services(void)
+{
+	[[NSAppleEventManager sharedAppleEventManager]
+		removeEventHandlerForEventClass:kCoreEventClass
+		andEventID:kAEOpenDocuments];
+	if (NSApp.servicesProvider == fileManagerServicesProvider)
+	{
+		NSApp.servicesProvider = nil;
+	}
+	fileManagerServicesProvider.openPathsCallback = NULL;
+	fileManagerServicesProvider.callbackContext = NULL;
+	fileManagerServicesProvider = nil;
 }
 
 static NSInteger files_count_menu_commands(NSMenu *menu)
@@ -1728,6 +1871,44 @@ __attribute__((visibility("default"))) char *files_macos_restore_from_trash(cons
 	}
 }
 
+static void files_macos_restore_quick_look_owner(void)
+{
+	NSWindow *ownerWindow = quickLookOwnerWindow;
+	NSResponder *ownerFirstResponder = quickLookOwnerFirstResponder;
+	if (ownerWindow != nil)
+	{
+		[ownerWindow makeKeyAndOrderFront:nil];
+		if (ownerFirstResponder != nil)
+		{
+			[ownerWindow makeFirstResponder:ownerFirstResponder];
+		}
+	}
+}
+
+static void files_macos_finish_quick_look_close(QLPreviewPanel *panel, int attempt)
+{
+	if (panel.isVisible && attempt < 120)
+	{
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 16 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+			files_macos_finish_quick_look_close(panel, attempt + 1);
+		});
+		return;
+	}
+
+	files_macos_restore_quick_look_owner();
+	if (spaceKeyCallback != NULL)
+	{
+		spaceKeyCallback(auxiliaryMouseCallbackContext, 2);
+	}
+}
+
+static void files_macos_close_quick_look(QLPreviewPanel *panel)
+{
+	[panel orderOut:nil];
+	files_macos_restore_quick_look_owner();
+	files_macos_finish_quick_look_close(panel, 0);
+}
+
 __attribute__((visibility("default"))) int files_macos_preview_path(const char *path)
 {
 	@autoreleasepool
@@ -1738,14 +1919,30 @@ __attribute__((visibility("default"))) int files_macos_preview_path(const char *
 			return 0;
 		}
 
-		dispatch_async(dispatch_get_main_queue(), ^{
+		void (^previewOperation)(void) = ^{
+			QLPreviewPanel *panel = [QLPreviewPanel sharedPreviewPanel];
+			if (panel.isVisible)
+			{
+				files_macos_close_quick_look(panel);
+				return;
+			}
+
+			quickLookOwnerWindow = NSApp.keyWindow ?: NSApp.mainWindow;
+			quickLookOwnerFirstResponder = quickLookOwnerWindow.firstResponder;
 			quickLookDataSource = [FilesQuickLookDataSource new];
 			quickLookDataSource.url = url;
-			QLPreviewPanel *panel = [QLPreviewPanel sharedPreviewPanel];
 			panel.dataSource = quickLookDataSource;
 			[panel reloadData];
 			[panel makeKeyAndOrderFront:nil];
-		});
+		};
+		if ([NSThread isMainThread])
+		{
+			previewOperation();
+		}
+		else
+		{
+			dispatch_sync(dispatch_get_main_queue(), previewOperation);
+		}
 		return 1;
 	}
 }
@@ -2523,7 +2720,10 @@ __attribute__((visibility("default"))) char *files_macos_share_files(const char 
 			}
 
 			sharingServicePicker = [[NSSharingServicePicker alloc] initWithItems:urls];
-			[sharingServicePicker showRelativeToRect:view.bounds ofView:view preferredEdge:NSRectEdgeMaxY];
+			NSPoint mouseInWindow = [window convertPointFromScreen:NSEvent.mouseLocation];
+			NSPoint mouseInView = [view convertPoint:mouseInWindow fromView:nil];
+			NSRect mouseAnchor = NSMakeRect(mouseInView.x + 4, mouseInView.y - 1, 2, 2);
+			[sharingServicePicker showRelativeToRect:mouseAnchor ofView:view preferredEdge:NSRectEdgeMaxX];
 		});
 		return result;
 	}

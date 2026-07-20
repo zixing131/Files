@@ -86,6 +86,7 @@
 			<_MacOSRuntimeFile
 				Include="$(PublishDir)**/*"
 				Exclude="@(_MacOSExecutableFile);$(PublishDir)Packaging/**/*;$(PublishDir)**/*.pdb;$(PublishDir)createdump;$(PublishDir)libmscordaccore.dylib;$(PublishDir)libmscordbi.dylib;$(PublishDir)libclrgcexp.dylib" />
+			<_MacOSLocalizedResource Include="$(MSBuildProjectDirectory)/Packaging/**/*.lproj/ServicesMenu.strings" />
 			<_MacOSIconFile Include="icon_16x16.png"><PixelSize>16</PixelSize></_MacOSIconFile>
 			<_MacOSIconFile Include="icon_16x16@2x.png"><PixelSize>32</PixelSize></_MacOSIconFile>
 			<_MacOSIconFile Include="icon_32x32.png"><PixelSize>32</PixelSize></_MacOSIconFile>
@@ -106,6 +107,10 @@
 			DestinationFiles="@(_MacOSRuntimeFile->'$(_MacOSRuntimeResourcesDirectory)/%(RecursiveDir)%(Filename)%(Extension)')" />
 		<Copy SourceFiles="$(MacOSBridgeOutput)" DestinationFolder="$(_MacOSExecutableDirectory)" />
 		<Copy SourceFiles="$(MSBuildProjectDirectory)/Packaging/Info.plist" DestinationFolder="$(_MacOSContentsDirectory)" />
+		<MakeDir Directories="@(_MacOSLocalizedResource->'$(_MacOSResourcesDirectory)/%(RecursiveDir)')" />
+		<Copy
+			SourceFiles="@(_MacOSLocalizedResource)"
+			DestinationFiles="@(_MacOSLocalizedResource->'$(_MacOSResourcesDirectory)/%(RecursiveDir)%(Filename)%(Extension)')" />
 		<Exec Command="/bin/zsh -c 'for item in &quot;$(_MacOSRuntimeResourcesDirectory)&quot;/*(DN); do name=${item:t}; /bin/ln -s &quot;../Resources/Runtime/$name&quot; &quot;$(_MacOSExecutableDirectory)/$name&quot;; done'" />
 		<Exec Command="/bin/zsh -c 'for library in &quot;$(_MacOSExecutableDirectory)&quot;/*.dylib(N); do name=${library:t}; /bin/ln -s &quot;../../MacOS/$name&quot; &quot;$(_MacOSRuntimeResourcesDirectory)/$name&quot;; done'" />
 

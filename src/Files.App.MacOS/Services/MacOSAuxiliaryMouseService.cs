@@ -11,20 +11,27 @@ internal sealed class MacOSAuxiliaryMouseService : IDisposable
 	private readonly DispatcherQueue dispatcherQueue;
 	private readonly Action<int> auxiliaryMouseCallback;
 	private readonly Func<double, double, bool, bool> scrollWheelCallback;
+	private readonly Func<bool, bool> spaceKeyCallback;
+	private readonly Action quickLookClosedCallback;
 	private bool isDisposed;
 
 	public unsafe MacOSAuxiliaryMouseService(
 		DispatcherQueue dispatcherQueue,
 		Action<int> auxiliaryMouseCallback,
-		Func<double, double, bool, bool> scrollWheelCallback)
+		Func<double, double, bool, bool> scrollWheelCallback,
+		Func<bool, bool> spaceKeyCallback,
+		Action quickLookClosedCallback)
 	{
 		this.dispatcherQueue = dispatcherQueue;
 		this.auxiliaryMouseCallback = auxiliaryMouseCallback;
 		this.scrollWheelCallback = scrollWheelCallback;
+		this.spaceKeyCallback = spaceKeyCallback;
+		this.quickLookClosedCallback = quickLookClosedCallback;
 		callbackHandle = GCHandle.Alloc(this);
 		MacOSNativeMethods.InstallAuxiliaryMouseHandler(
 			&HandleAuxiliaryMouseButton,
 			&HandleScrollWheel,
+			&HandleSpaceKey,
 			GCHandle.ToIntPtr(callbackHandle));
 	}
 
@@ -53,6 +60,31 @@ internal sealed class MacOSAuxiliaryMouseService : IDisposable
 
 			return service.dispatcherQueue.TryEnqueue(() =>
 				service.scrollWheelCallback(deltaX, deltaY, hasPreciseDeltas is not 0)) ? 1 : 0;
+		}
+		catch
+		{
+			return 0;
+		}
+	}
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static int HandleSpaceKey(nint context, int quickLookVisible)
+	{
+		try
+		{
+			if (GCHandle.FromIntPtr(context).Target is not MacOSAuxiliaryMouseService service ||
+				!service.dispatcherQueue.HasThreadAccess)
+			{
+				return 0;
+			}
+
+			if (quickLookVisible is 2)
+			{
+				service.quickLookClosedCallback();
+				return 1;
+			}
+
+			return service.spaceKeyCallback(quickLookVisible is 1) ? 1 : 0;
 		}
 		catch
 		{
