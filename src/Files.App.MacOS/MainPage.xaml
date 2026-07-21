@@ -748,6 +748,16 @@
 							HorizontalAlignment="Center"
 							IsActive="{Binding ActiveTab.Browser.IsLoading}"
 							VerticalAlignment="Center" />
+						<Canvas x:Name="PrimaryMarqueeLayer" IsHitTestVisible="False">
+							<Border
+								x:Name="PrimaryMarqueeRectangle"
+								Background="{ThemeResource FilesAccentBrush}"
+								BorderBrush="{ThemeResource FilesAccentBrush}"
+								BorderThickness="1"
+								CornerRadius="2"
+								Opacity="0.22"
+								Visibility="Collapsed" />
+						</Canvas>
 					</Grid>
 				</Border>
 
@@ -949,6 +959,16 @@
 								HorizontalAlignment="Center"
 								IsActive="{Binding ActiveTab.SecondaryBrowser.IsLoading}"
 								VerticalAlignment="Center" />
+							<Canvas x:Name="SecondaryMarqueeLayer" IsHitTestVisible="False">
+								<Border
+									x:Name="SecondaryMarqueeRectangle"
+									Background="{ThemeResource FilesAccentBrush}"
+									BorderBrush="{ThemeResource FilesAccentBrush}"
+									BorderThickness="1"
+									CornerRadius="2"
+									Opacity="0.22"
+									Visibility="Collapsed" />
+							</Canvas>
 						</Grid>
 					</Border>
 				</Grid>

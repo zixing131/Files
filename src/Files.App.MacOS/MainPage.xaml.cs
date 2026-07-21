@@ -33,6 +33,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private const double KeyboardResizeStep = 16;
 	private const long TypeSelectResetMilliseconds = 900;
 	private const long QuickLookToggleDebounceMilliseconds = 150;
+	private const double ItemDragDelayMilliseconds = 220;
+	private const double MarqueeDragThreshold = 5;
+	private const double MarqueeAutoScrollEdge = 24;
+	private const double MarqueeAutoScrollMaximumStep = 32;
 	private const string InternalFileDragFormat = "application/x-files-macos-internal-file-drag";
 	private const string HomeBreadcrumbIconData = "M7.07934 1.22258C7.60474 0.797737 8.35525 0.797737 8.88065 1.22258L15.4689 6.55068C16.5623 7.43475 15.9402 9.20232 14.5276 9.20232H14.25V13.75C14.25 14.7165 13.4665 15.5 12.5 15.5H10.5C9.5335 15.5 8.75 14.7165 8.75 13.75V11.25C8.75 10.8358 8.41421 10.5 8 10.5C7.58579 10.5 7.25 10.8358 7.25 11.25V13.75C7.25 14.7165 6.4665 15.5 5.5 15.5H3.5C2.5335 15.5 1.75 14.7165 1.75 13.75V9.20232H1.43239C0.0198307 9.20232 -0.602245 7.43475 0.491105 6.55068L7.07934 1.22258ZM8.25178 2.0001C8.09322 1.87188 7.86677 1.87188 7.70821 2.0001L1.11996 7.3282C0.756928 7.62179 0.963431 8.20232 1.43239 8.20232H2.75V13.75C2.75 14.1642 3.08579 14.5 3.5 14.5H5.5C5.91421 14.5 6.25 14.1642 6.25 13.75V11.25C6.25 10.2835 7.0335 9.5 8 9.5C8.9665 9.5 9.75 10.2835 9.75 11.25V13.75C9.75 14.1642 10.0858 14.5 10.5 14.5H12.5C12.9142 14.5 13.25 14.1642 13.25 13.75V8.20232H14.5276C14.9966 8.20232 15.2031 7.62179 14.84 7.3282L8.25178 2.0001Z";
 	private MainPageViewModel ViewModel { get; } = new();
@@ -103,6 +107,31 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private QuickLookRestoreState? quickLookRestoreState;
 	private string? lastControlClickPath;
 	private long lastControlClickTimestamp;
+	private FrameworkElement? marqueeControl;
+	private DirectoryBrowserViewModel? marqueeBrowser;
+	private Canvas? marqueeLayer;
+	private Border? marqueeRectangle;
+	private Windows.Foundation.Point marqueeStartPoint;
+	private Windows.Foundation.Point marqueeOriginContentPoint;
+	private Windows.Foundation.Point marqueeCurrentPoint;
+	private readonly Dictionary<LocalFileSystemItem, Windows.Foundation.Rect> marqueeItemBounds = [];
+	private HashSet<LocalFileSystemItem> marqueeInitialSelection = [];
+	private bool marqueePreservesSelection;
+	private bool marqueeTogglesSelection;
+	private bool hasMarqueeMoved;
+	private FrameworkElement? pendingMarqueeControl;
+	private DirectoryBrowserViewModel? pendingMarqueeBrowser;
+	private Canvas? pendingMarqueeLayer;
+	private Border? pendingMarqueeRectangle;
+	private PointerRoutedEventArgs? pendingMarqueePointerArgs;
+	private Windows.Foundation.Point pendingMarqueeStartPoint;
+	private bool pendingMarqueePreservesSelection;
+	private bool pendingMarqueeTogglesSelection;
+	private bool pendingMarqueeAllowsItemDrag;
+	private LocalFileSystemItem? pressedMarqueeItem;
+	private bool pressedMarqueeItemWasSelected;
+	private Microsoft.UI.Dispatching.DispatcherQueueTimer? itemGestureTimer;
+	private Microsoft.UI.Dispatching.DispatcherQueueTimer? marqueeAutoScrollTimer;
 
 	public MainPage()
 		: this(restoresWorkspace: true)
@@ -127,6 +156,10 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		RegisterContentWheelHandler(SecondaryGridItems);
 		RegisterContentWheelHandler(SecondaryDetailsItems);
 		RegisterContentWheelHandler(SidebarList);
+		RegisterMarqueeSelectionHandlers(GridItems);
+		RegisterMarqueeSelectionHandlers(DetailsItems);
+		RegisterMarqueeSelectionHandlers(SecondaryGridItems);
+		RegisterMarqueeSelectionHandlers(SecondaryDetailsItems);
 		PrimaryPaneBorder.PointerEntered += (_, _) => SetPanePointerState(isPrimary: true, isPointerOver: true);
 		PrimaryPaneBorder.PointerExited += (_, _) => SetPanePointerState(isPrimary: true, isPointerOver: false);
 		SecondaryPaneBorder.PointerEntered += (_, _) => SetPanePointerState(isPrimary: false, isPointerOver: true);
@@ -3152,6 +3185,588 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private void RegisterMarqueeSelectionHandlers(FrameworkElement control)
+	{
+		control.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Marquee_PointerPressed), handledEventsToo: true);
+		control.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Marquee_PointerMoved), handledEventsToo: true);
+		control.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Marquee_PointerReleased), handledEventsToo: true);
+		control.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(Marquee_PointerCaptureLost), handledEventsToo: true);
+		control.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(Marquee_PointerCaptureLost), handledEventsToo: true);
+	}
+
+	private void Marquee_PointerPressed(object sender, PointerRoutedEventArgs e)
+	{
+		if (marqueeControl is not null ||
+			sender is not FrameworkElement control ||
+			!IsLeftPointerPress(e, control) ||
+			e.Pointer.PointerDeviceType is Microsoft.UI.Input.PointerDeviceType.Touch ||
+			GetBrowserForItemsControl(control) is not DirectoryBrowserViewModel browser)
+		{
+			return;
+		}
+
+		int targetKind = GetMarqueeTargetKind(e.OriginalSource as DependencyObject, control);
+		if (targetKind is 0)
+		{
+			return;
+		}
+		(Canvas layer, Border rectangle) = ReferenceEquals(control, SecondaryGridItems) ||
+			ReferenceEquals(control, SecondaryDetailsItems)
+			? (SecondaryMarqueeLayer, SecondaryMarqueeRectangle)
+			: (PrimaryMarqueeLayer, PrimaryMarqueeRectangle);
+		Windows.Foundation.Point startPoint = ClampToMarqueeControl(e.GetCurrentPoint(layer).Position, control, layer);
+		bool togglesSelection = IsKeyDown(VirtualKey.Control);
+		bool preservesSelection = togglesSelection || IsKeyDown(VirtualKey.Shift);
+		if (targetKind is 2)
+		{
+			if (pressedMarqueeItemWasSelected &&
+				FindMarqueeItem(e.OriginalSource as DependencyObject, control) is LocalFileSystemItem item &&
+				ReferenceEquals(item, pressedMarqueeItem))
+			{
+				CancelPendingMarqueeSelection();
+				return;
+			}
+			ScheduleItemGestureDecision(
+				control,
+				browser,
+				layer,
+				rectangle,
+				e,
+				startPoint,
+				preservesSelection,
+				togglesSelection);
+			return;
+		}
+
+		BeginMarqueeSelection(
+			control,
+			browser,
+			layer,
+			rectangle,
+			e,
+			startPoint,
+			preservesSelection,
+			togglesSelection,
+			startedFromItem: false);
+		e.Handled = true;
+	}
+
+	private static bool IsLeftPointerPress(PointerRoutedEventArgs e, UIElement relativeTo)
+	{
+		var properties = e.GetCurrentPoint(relativeTo).Properties;
+		return properties.IsLeftButtonPressed ||
+			properties.PointerUpdateKind is Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed;
+	}
+
+	private void BeginMarqueeSelection(
+		FrameworkElement control,
+		DirectoryBrowserViewModel browser,
+		Canvas layer,
+		Border rectangle,
+		PointerRoutedEventArgs pointerArgs,
+		Windows.Foundation.Point startPoint,
+		bool preservesSelection,
+		bool togglesSelection,
+		bool startedFromItem)
+	{
+		ActivateBrowser(browser, control);
+		control.Focus(FocusState.Pointer);
+		marqueeControl = control;
+		marqueeBrowser = browser;
+		marqueeLayer = layer;
+		marqueeRectangle = rectangle;
+		marqueeStartPoint = startPoint;
+		marqueeCurrentPoint = startPoint;
+		marqueeOriginContentPoint = ToMarqueeContentPoint(startPoint, control, layer);
+		marqueeItemBounds.Clear();
+		CacheRealizedMarqueeItems(control, layer);
+		marqueeInitialSelection = GetSelectedItems(control).ToHashSet();
+		marqueeTogglesSelection = togglesSelection;
+		marqueePreservesSelection = preservesSelection;
+		hasMarqueeMoved = false;
+
+		if (!marqueePreservesSelection && !startedFromItem)
+		{
+			ApplyMarqueeSelection(browser, control, []);
+		}
+		control.CapturePointer(pointerArgs.Pointer);
+	}
+
+	private void ScheduleItemGestureDecision(
+		FrameworkElement control,
+		DirectoryBrowserViewModel browser,
+		Canvas layer,
+		Border rectangle,
+		PointerRoutedEventArgs pointerArgs,
+		Windows.Foundation.Point startPoint,
+		bool preservesSelection,
+		bool togglesSelection)
+	{
+		CancelPendingMarqueeSelection();
+		pendingMarqueeControl = control;
+		pendingMarqueeBrowser = browser;
+		pendingMarqueeLayer = layer;
+		pendingMarqueeRectangle = rectangle;
+		pendingMarqueePointerArgs = pointerArgs;
+		pendingMarqueeStartPoint = startPoint;
+		pendingMarqueePreservesSelection = preservesSelection;
+		pendingMarqueeTogglesSelection = togglesSelection;
+		pendingMarqueeAllowsItemDrag = false;
+		itemGestureTimer = DispatcherQueue.CreateTimer();
+		itemGestureTimer.Interval = TimeSpan.FromMilliseconds(ItemDragDelayMilliseconds);
+		itemGestureTimer.IsRepeating = false;
+		itemGestureTimer.Tick += ItemGestureTimer_Tick;
+		itemGestureTimer.Start();
+	}
+
+	private void ItemGestureTimer_Tick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+	{
+		if (pendingMarqueeControl is null)
+		{
+			CancelPendingMarqueeSelection();
+			return;
+		}
+
+		sender.Stop();
+		sender.Tick -= ItemGestureTimer_Tick;
+		itemGestureTimer = null;
+		pendingMarqueeAllowsItemDrag = true;
+	}
+
+	private void CancelPendingMarqueeSelection()
+	{
+		if (itemGestureTimer is Microsoft.UI.Dispatching.DispatcherQueueTimer timer)
+		{
+			timer.Stop();
+			timer.Tick -= ItemGestureTimer_Tick;
+		}
+		itemGestureTimer = null;
+		pendingMarqueeControl = null;
+		pendingMarqueeBrowser = null;
+		pendingMarqueeLayer = null;
+		pendingMarqueeRectangle = null;
+		pendingMarqueePointerArgs = null;
+		pendingMarqueePreservesSelection = false;
+		pendingMarqueeTogglesSelection = false;
+		pendingMarqueeAllowsItemDrag = false;
+	}
+
+	private void Marquee_PointerMoved(object sender, PointerRoutedEventArgs e)
+	{
+		if (ReferenceEquals(sender, pendingMarqueeControl) &&
+			pendingMarqueeControl is FrameworkElement pendingControl &&
+			pendingMarqueeLayer is Canvas pendingLayer)
+		{
+			Windows.Foundation.Point pendingPoint = e.GetCurrentPoint(pendingLayer).Position;
+			if (pendingMarqueeAllowsItemDrag)
+			{
+				return;
+			}
+			if (Math.Abs(pendingPoint.X - pendingMarqueeStartPoint.X) < MarqueeDragThreshold &&
+				Math.Abs(pendingPoint.Y - pendingMarqueeStartPoint.Y) < MarqueeDragThreshold)
+			{
+				return;
+			}
+
+			FrameworkElement resolvedControl = pendingControl;
+			DirectoryBrowserViewModel? resolvedBrowser = pendingMarqueeBrowser;
+			Canvas resolvedLayer = pendingLayer;
+			Border? resolvedRectangle = pendingMarqueeRectangle;
+			PointerRoutedEventArgs? pointerArgs = pendingMarqueePointerArgs;
+			Windows.Foundation.Point startPoint = pendingMarqueeStartPoint;
+			bool preservesSelection = pendingMarqueePreservesSelection;
+			bool togglesSelection = pendingMarqueeTogglesSelection;
+			CancelPendingMarqueeSelection();
+			if (resolvedBrowser is null || resolvedRectangle is null || pointerArgs is null)
+			{
+				return;
+			}
+			BeginMarqueeSelection(
+				resolvedControl,
+				resolvedBrowser,
+				resolvedLayer,
+				resolvedRectangle,
+				pointerArgs,
+				startPoint,
+				preservesSelection,
+				togglesSelection,
+				startedFromItem: true);
+		}
+		if (!ReferenceEquals(sender, marqueeControl) || marqueeLayer is not Canvas layer || marqueeRectangle is not Border rectangle ||
+			marqueeBrowser is not DirectoryBrowserViewModel browser || marqueeControl is not FrameworkElement control)
+		{
+			return;
+		}
+
+		marqueeCurrentPoint = ClampToMarqueeControl(e.GetCurrentPoint(layer).Position, control, layer);
+		double width = Math.Abs(marqueeCurrentPoint.X - marqueeStartPoint.X);
+		double height = Math.Abs(marqueeCurrentPoint.Y - marqueeStartPoint.Y);
+		if (!hasMarqueeMoved && width < MarqueeDragThreshold && height < MarqueeDragThreshold)
+		{
+			return;
+		}
+
+		hasMarqueeMoved = true;
+		rectangle.Visibility = Visibility.Visible;
+		EnsureMarqueeAutoScrollTimer();
+		UpdateActiveMarqueeSelection(allowAutoScroll: true);
+		e.Handled = true;
+	}
+
+	private void EnsureMarqueeAutoScrollTimer()
+	{
+		if (marqueeAutoScrollTimer is not null)
+		{
+			return;
+		}
+		marqueeAutoScrollTimer = DispatcherQueue.CreateTimer();
+		marqueeAutoScrollTimer.Interval = TimeSpan.FromMilliseconds(50);
+		marqueeAutoScrollTimer.IsRepeating = true;
+		marqueeAutoScrollTimer.Tick += MarqueeAutoScrollTimer_Tick;
+		marqueeAutoScrollTimer.Start();
+	}
+
+	private void MarqueeAutoScrollTimer_Tick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+	{
+		if (hasMarqueeMoved)
+		{
+			UpdateActiveMarqueeSelection(allowAutoScroll: true);
+		}
+	}
+
+	private void UpdateActiveMarqueeSelection(bool allowAutoScroll)
+	{
+		if (marqueeControl is not FrameworkElement control ||
+			marqueeBrowser is not DirectoryBrowserViewModel browser ||
+			marqueeLayer is not Canvas layer ||
+			marqueeRectangle is not Border rectangle)
+		{
+			return;
+		}
+
+		if (allowAutoScroll && ScrollMarqueeAtViewportEdge(control, layer, marqueeCurrentPoint))
+		{
+			control.UpdateLayout();
+		}
+		CacheRealizedMarqueeItems(control, layer);
+		Windows.Foundation.Point currentContentPoint = ToMarqueeContentPoint(marqueeCurrentPoint, control, layer);
+		Windows.Foundation.Rect selectionContentBounds = CreateMarqueeBounds(marqueeOriginContentPoint, currentContentPoint);
+		DrawMarqueeRectangle(control, layer, rectangle, marqueeOriginContentPoint, marqueeCurrentPoint);
+		HashSet<LocalFileSystemItem> intersectingItems = marqueeItemBounds
+			.Where(entry => RectanglesIntersect(selectionContentBounds, entry.Value))
+			.Select(static entry => entry.Key)
+			.ToHashSet();
+		ApplyMarqueeSelection(browser, control, intersectingItems);
+	}
+
+	private void Marquee_PointerReleased(object sender, PointerRoutedEventArgs e)
+	{
+		pressedMarqueeItem = null;
+		pressedMarqueeItemWasSelected = false;
+		if (ReferenceEquals(sender, pendingMarqueeControl))
+		{
+			CancelPendingMarqueeSelection();
+			return;
+		}
+		if (!ReferenceEquals(sender, marqueeControl) || marqueeControl is not FrameworkElement control)
+		{
+			return;
+		}
+
+		control.ReleasePointerCapture(e.Pointer);
+		EndMarqueeSelection();
+		e.Handled = true;
+	}
+
+	private void Marquee_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
+	{
+		pressedMarqueeItem = null;
+		pressedMarqueeItemWasSelected = false;
+		if (ReferenceEquals(sender, pendingMarqueeControl))
+		{
+			CancelPendingMarqueeSelection();
+		}
+		if (ReferenceEquals(sender, marqueeControl))
+		{
+			EndMarqueeSelection();
+		}
+	}
+
+	private void EndMarqueeSelection()
+	{
+		if (marqueeAutoScrollTimer is Microsoft.UI.Dispatching.DispatcherQueueTimer timer)
+		{
+			timer.Stop();
+			timer.Tick -= MarqueeAutoScrollTimer_Tick;
+		}
+		marqueeAutoScrollTimer = null;
+		if (marqueeRectangle is Border rectangle)
+		{
+			rectangle.Visibility = Visibility.Collapsed;
+			rectangle.Width = 0;
+			rectangle.Height = 0;
+		}
+		marqueeControl = null;
+		marqueeBrowser = null;
+		marqueeLayer = null;
+		marqueeRectangle = null;
+		marqueeItemBounds.Clear();
+		marqueeInitialSelection = [];
+		marqueePreservesSelection = false;
+		marqueeTogglesSelection = false;
+		hasMarqueeMoved = false;
+	}
+
+	private static int GetMarqueeTargetKind(DependencyObject? source, DependencyObject control)
+	{
+		bool isItem = false;
+		for (DependencyObject? current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+		{
+			if (current is Microsoft.UI.Xaml.Controls.Primitives.ScrollBar or TextBox)
+			{
+				return 0;
+			}
+			if (current is FrameworkElement { DataContext: LocalFileSystemItem })
+			{
+				isItem = true;
+			}
+			if (ReferenceEquals(current, control))
+			{
+				return isItem ? 2 : 1;
+			}
+		}
+
+		return 0;
+	}
+
+	private static LocalFileSystemItem? FindMarqueeItem(DependencyObject? source, DependencyObject control)
+	{
+		for (DependencyObject? current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+		{
+			if (current is FrameworkElement { DataContext: LocalFileSystemItem item })
+			{
+				return item;
+			}
+			if (ReferenceEquals(current, control))
+			{
+				break;
+			}
+		}
+		return null;
+	}
+
+	private static Windows.Foundation.Point ClampToMarqueeControl(
+		Windows.Foundation.Point point,
+		FrameworkElement control,
+		FrameworkElement layer)
+	{
+		Windows.Foundation.Point origin = control.TransformToVisual(layer).TransformPoint(default);
+		return new(
+			Math.Clamp(point.X, origin.X, origin.X + control.ActualWidth),
+			Math.Clamp(point.Y, origin.Y, origin.Y + control.ActualHeight));
+	}
+
+	private static IReadOnlyList<LocalFileSystemItem> GetSelectedItems(FrameworkElement control) => control switch
+	{
+		ItemsView view => view.SelectedItems.OfType<LocalFileSystemItem>().ToArray(),
+		ListViewBase list => list.SelectedItems.OfType<LocalFileSystemItem>().ToArray(),
+		_ => [],
+	};
+
+	private void CacheRealizedMarqueeItems(FrameworkElement control, FrameworkElement layer)
+	{
+		var containers = new List<FrameworkElement>();
+		if (control is ItemsView itemsView && FindVisualDescendant<ItemsRepeater>(itemsView) is ItemsRepeater repeater)
+		{
+			for (int index = 0; index < VisualTreeHelper.GetChildrenCount(repeater); index++)
+			{
+				if (VisualTreeHelper.GetChild(repeater, index) is FrameworkElement container)
+				{
+					containers.Add(container);
+				}
+			}
+		}
+		else if (control is ListViewBase { ItemsPanelRoot: Panel itemsPanel })
+		{
+			containers.AddRange(itemsPanel.Children.OfType<FrameworkElement>());
+		}
+
+		Windows.Foundation.Point controlOrigin = control.TransformToVisual(layer).TransformPoint(default);
+		(double horizontalOffset, double verticalOffset) = GetMarqueeScrollOffsets(control);
+		foreach (FrameworkElement container in containers)
+		{
+			if (container.DataContext is not LocalFileSystemItem item || container.ActualWidth <= 0 || container.ActualHeight <= 0)
+			{
+				continue;
+			}
+			Windows.Foundation.Point origin = container.TransformToVisual(layer).TransformPoint(default);
+			marqueeItemBounds[item] = new Windows.Foundation.Rect(
+				origin.X - controlOrigin.X + horizontalOffset,
+				origin.Y - controlOrigin.Y + verticalOffset,
+				container.ActualWidth,
+				container.ActualHeight);
+		}
+	}
+
+	private static Windows.Foundation.Point ToMarqueeContentPoint(
+		Windows.Foundation.Point point,
+		FrameworkElement control,
+		FrameworkElement layer)
+	{
+		Windows.Foundation.Point controlOrigin = control.TransformToVisual(layer).TransformPoint(default);
+		(double horizontalOffset, double verticalOffset) = GetMarqueeScrollOffsets(control);
+		return new(
+			point.X - controlOrigin.X + horizontalOffset,
+			point.Y - controlOrigin.Y + verticalOffset);
+	}
+
+	private static (double Horizontal, double Vertical) GetMarqueeScrollOffsets(FrameworkElement control)
+	{
+		if (control is ItemsView itemsView &&
+			(itemsView.ScrollView ?? FindVisualDescendant<ScrollView>(itemsView)) is ScrollView scrollView)
+		{
+			return (scrollView.HorizontalOffset, scrollView.VerticalOffset);
+		}
+		if (control is ListViewBase && FindVisualDescendant<ScrollViewer>(control) is ScrollViewer scrollViewer)
+		{
+			return (scrollViewer.HorizontalOffset, scrollViewer.VerticalOffset);
+		}
+		return default;
+	}
+
+	private static Windows.Foundation.Rect CreateMarqueeBounds(
+		Windows.Foundation.Point first,
+		Windows.Foundation.Point second) =>
+		new(
+			Math.Min(first.X, second.X),
+			Math.Min(first.Y, second.Y),
+			Math.Abs(second.X - first.X),
+			Math.Abs(second.Y - first.Y));
+
+	private static void DrawMarqueeRectangle(
+		FrameworkElement control,
+		FrameworkElement layer,
+		Border rectangle,
+		Windows.Foundation.Point originContentPoint,
+		Windows.Foundation.Point currentPoint)
+	{
+		Windows.Foundation.Point controlOrigin = control.TransformToVisual(layer).TransformPoint(default);
+		(double horizontalOffset, double verticalOffset) = GetMarqueeScrollOffsets(control);
+		var originPoint = new Windows.Foundation.Point(
+			controlOrigin.X + originContentPoint.X - horizontalOffset,
+			controlOrigin.Y + originContentPoint.Y - verticalOffset);
+		Windows.Foundation.Rect unclippedBounds = CreateMarqueeBounds(originPoint, currentPoint);
+		double left = Math.Max(unclippedBounds.X, controlOrigin.X);
+		double top = Math.Max(unclippedBounds.Y, controlOrigin.Y);
+		double right = Math.Min(unclippedBounds.X + unclippedBounds.Width, controlOrigin.X + control.ActualWidth);
+		double bottom = Math.Min(unclippedBounds.Y + unclippedBounds.Height, controlOrigin.Y + control.ActualHeight);
+		Canvas.SetLeft(rectangle, left);
+		Canvas.SetTop(rectangle, top);
+		rectangle.Width = Math.Max(0, right - left);
+		rectangle.Height = Math.Max(0, bottom - top);
+	}
+
+	private static bool ScrollMarqueeAtViewportEdge(
+		FrameworkElement control,
+		FrameworkElement layer,
+		Windows.Foundation.Point pointerPoint)
+	{
+		Windows.Foundation.Point controlOrigin = control.TransformToVisual(layer).TransformPoint(default);
+		double localY = pointerPoint.Y - controlOrigin.Y;
+		double direction;
+		double edgeDistance;
+		if (localY < MarqueeAutoScrollEdge)
+		{
+			direction = -1;
+			edgeDistance = MarqueeAutoScrollEdge - localY;
+		}
+		else if (localY > control.ActualHeight - MarqueeAutoScrollEdge)
+		{
+			direction = 1;
+			edgeDistance = localY - (control.ActualHeight - MarqueeAutoScrollEdge);
+		}
+		else
+		{
+			return false;
+		}
+
+		double step = direction * Math.Clamp(edgeDistance * 1.5, 4, MarqueeAutoScrollMaximumStep);
+		if (control is ItemsView itemsView &&
+			(itemsView.ScrollView ?? FindVisualDescendant<ScrollView>(itemsView)) is ScrollView scrollView)
+		{
+			double maximumOffset = Math.Max(0, scrollView.ExtentHeight - scrollView.ViewportHeight);
+			double targetOffset = Math.Clamp(scrollView.VerticalOffset + step, 0, maximumOffset);
+			if (Math.Abs(targetOffset - scrollView.VerticalOffset) < 0.1)
+			{
+				return false;
+			}
+			scrollView.ScrollTo(
+				scrollView.HorizontalOffset,
+				targetOffset,
+				new ScrollingScrollOptions(ScrollingAnimationMode.Disabled, ScrollingSnapPointsMode.Ignore));
+			return true;
+		}
+		if (control is ListViewBase && FindVisualDescendant<ScrollViewer>(control) is ScrollViewer scrollViewer)
+		{
+			double targetOffset = Math.Clamp(scrollViewer.VerticalOffset + step, 0, scrollViewer.ScrollableHeight);
+			if (Math.Abs(targetOffset - scrollViewer.VerticalOffset) < 0.1)
+			{
+				return false;
+			}
+			scrollViewer.ChangeView(null, targetOffset, null, disableAnimation: true);
+			return true;
+		}
+		return false;
+	}
+
+	private static bool RectanglesIntersect(Windows.Foundation.Rect first, Windows.Foundation.Rect second) =>
+		first.X <= second.X + second.Width && first.X + first.Width >= second.X &&
+		first.Y <= second.Y + second.Height && first.Y + first.Height >= second.Y;
+
+	private void ApplyMarqueeSelection(
+		DirectoryBrowserViewModel browser,
+		FrameworkElement control,
+		IReadOnlyCollection<LocalFileSystemItem> intersectingItems)
+	{
+		var resultingSelection = marqueePreservesSelection
+			? marqueeInitialSelection.ToHashSet()
+			: [];
+		if (marqueeTogglesSelection)
+		{
+			foreach (LocalFileSystemItem item in intersectingItems)
+			{
+				if (!resultingSelection.Remove(item))
+				{
+					resultingSelection.Add(item);
+				}
+			}
+		}
+		else
+		{
+			resultingSelection.UnionWith(intersectingItems);
+		}
+		resultingSelection.IntersectWith(browser.Items);
+		if (resultingSelection.SetEquals(GetSelectedItems(control)))
+		{
+			return;
+		}
+
+		isUpdatingSelection = true;
+		try
+		{
+			RestoreSelection(browser, control, resultingSelection.ToArray());
+		}
+		finally
+		{
+			isUpdatingSelection = false;
+		}
+		ViewModel.SetActiveBrowser(browser);
+		selectedItems = browser.Items.Where(resultingSelection.Contains).ToArray();
+		browser.UpdateSelection(selectedItems);
+		UpdatePaneVisuals();
+		UpdateCommandStates();
+	}
+
 	private void SelectAllMenuItem_Click(object sender, RoutedEventArgs e)
 	{
 		SelectItems(invert: false);
@@ -3940,6 +4555,11 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	{
 		if (sender is ListViewBase list && GetBrowserForItemsControl(list) is DirectoryBrowserViewModel browser)
 		{
+			if (ShouldCancelItemDragForMarquee(list))
+			{
+				e.Cancel = true;
+				return;
+			}
 			ActivateBrowser(browser, list);
 		}
 
@@ -3962,6 +4582,11 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			e.Cancel = true;
 			return;
 		}
+		if (ShouldCancelItemDragForMarquee(view))
+		{
+			e.Cancel = true;
+			return;
+		}
 
 		int index = browser.Items.IndexOf(item);
 		if (index < 0)
@@ -3979,6 +4604,25 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			e.Cancel = true;
 		}
+	}
+
+	private bool ShouldCancelItemDragForMarquee(FrameworkElement control)
+	{
+		if (ReferenceEquals(control, marqueeControl))
+		{
+			return true;
+		}
+		if (!ReferenceEquals(control, pendingMarqueeControl))
+		{
+			return false;
+		}
+		if (!pendingMarqueeAllowsItemDrag)
+		{
+			return true;
+		}
+
+		CancelPendingMarqueeSelection();
+		return false;
 	}
 
 	private static bool ConfigureOutboundDrag(DataPackage data, IReadOnlyList<string> paths, bool prepareNativeDrag = true)
@@ -4184,10 +4828,21 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void Item_PointerPressed(object sender, PointerRoutedEventArgs e)
 	{
-		if (!e.GetCurrentPoint(sender as UIElement).Properties.IsLeftButtonPressed ||
-			!IsKeyDown(VirtualKey.Control) ||
-			sender is not FrameworkElement { DataContext: LocalFileSystemItem item } ||
+		if (sender is not FrameworkElement { DataContext: LocalFileSystemItem item } element ||
+			!IsLeftPointerPress(e, element) ||
 			GetBrowserForItem(item) is not DirectoryBrowserViewModel browser)
+		{
+			return;
+		}
+		FrameworkElement control = GetVisibleItemsControl(browser);
+		pressedMarqueeItem = item;
+		pressedMarqueeItemWasSelected = control switch
+		{
+			ItemsView view => browser.Items.IndexOf(item) is int index && index >= 0 && view.IsSelected(index),
+			ListViewBase list => list.SelectedItems.Contains(item),
+			_ => false,
+		};
+		if (!IsKeyDown(VirtualKey.Control))
 		{
 			return;
 		}
