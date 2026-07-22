@@ -1832,6 +1832,78 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
+	private void BackButton_RightTapped(object sender, RightTappedRoutedEventArgs e)
+	{
+		if (sender is FrameworkElement element)
+		{
+			e.Handled = true;
+			ShowNavigationHistoryFlyout(element, backHistory: true);
+		}
+	}
+
+	private void ForwardButton_RightTapped(object sender, RightTappedRoutedEventArgs e)
+	{
+		if (sender is FrameworkElement element)
+		{
+			e.Handled = true;
+			ShowNavigationHistoryFlyout(element, backHistory: false);
+		}
+	}
+
+	// Finder shows the back/forward history when the navigation buttons are pressed and held;
+	// a right click offers the same menu here.
+	private void ShowNavigationHistoryFlyout(FrameworkElement target, bool backHistory)
+	{
+		if (Browser is not DirectoryBrowserViewModel browser)
+		{
+			return;
+		}
+
+		IReadOnlyList<string> history = backHistory ? browser.BackHistory : browser.ForwardHistory;
+		if (history.Count == 0)
+		{
+			return;
+		}
+
+		var flyout = new MenuFlyout();
+		foreach (string path in history)
+		{
+			var item = new MenuFlyoutItem
+			{
+				Text = GetPathMenuTitle(path),
+				Tag = (path, backHistory),
+			};
+			ToolTipService.SetToolTip(item, path);
+			item.Click += NavigationHistoryMenuItem_Click;
+			flyout.Items.Add(item);
+		}
+
+		flyout.ShowAt(target, new Windows.Foundation.Point(0, target.ActualHeight));
+	}
+
+	private async void NavigationHistoryMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is MenuFlyoutItem { Tag: (string path, bool backHistory) } &&
+			Browser is DirectoryBrowserViewModel browser)
+		{
+			if (backHistory)
+			{
+				await browser.GoBackToAsync(path);
+			}
+			else
+			{
+				await browser.GoForwardToAsync(path);
+			}
+		}
+	}
+
+	private static string GetPathMenuTitle(string path)
+	{
+		string trimmed = Path.TrimEndingDirectorySeparator(path);
+		string title = Path.GetFileName(trimmed);
+		return string.IsNullOrEmpty(title) ? trimmed : title;
+	}
+
 	private async void BackAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
 	{
 		if (!IsTextInputFocused() && Browser is not null)
@@ -8274,12 +8346,65 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void TabItem_PointerPressed(object sender, PointerRoutedEventArgs e)
 	{
+		if (sender is not TabViewItem { Tag: BrowserTabViewModel tab } tabItem)
+		{
+			return;
+		}
+
 		if (fileTransferCancellation is null &&
-			e.GetCurrentPoint(this).Properties.PointerUpdateKind is Microsoft.UI.Input.PointerUpdateKind.MiddleButtonPressed &&
-			sender is TabViewItem { Tag: BrowserTabViewModel tab })
+			e.GetCurrentPoint(this).Properties.PointerUpdateKind is Microsoft.UI.Input.PointerUpdateKind.MiddleButtonPressed)
 		{
 			e.Handled = true;
 			ViewModel.CloseTab(tab);
+			return;
+		}
+
+		// Finder shows the folder path hierarchy when the window title is Cmd-clicked;
+		// the active tab header acts as the window title here.
+		if (e.GetCurrentPoint(this).Properties.PointerUpdateKind is Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed &&
+			IsCommandModifierDown() &&
+			ReferenceEquals(ViewModel.ActiveTab, tab) &&
+			Browser is DirectoryBrowserViewModel browser)
+		{
+			e.Handled = true;
+			ShowTabPathFlyout(tabItem, browser, e.GetCurrentPoint(tabItem).Position);
+		}
+	}
+
+	private void ShowTabPathFlyout(FrameworkElement target, DirectoryBrowserViewModel browser, Windows.Foundation.Point position)
+	{
+		var flyout = new MenuFlyout();
+		string? path = Path.TrimEndingDirectorySeparator(browser.CurrentPath);
+		while (!string.IsNullOrEmpty(path))
+		{
+			var item = new MenuFlyoutItem
+			{
+				Text = GetPathMenuTitle(path),
+				Tag = path,
+			};
+			ToolTipService.SetToolTip(item, path);
+			item.Click += TabPathMenuItem_Click;
+			flyout.Items.Add(item);
+
+			string root = Path.GetPathRoot(path) ?? string.Empty;
+			if (path.Length <= root.Length)
+			{
+				break;
+			}
+			path = Path.GetDirectoryName(path);
+		}
+
+		if (flyout.Items.Count > 0)
+		{
+			flyout.ShowAt(target, position);
+		}
+	}
+
+	private async void TabPathMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is MenuFlyoutItem { Tag: string path } && Browser is DirectoryBrowserViewModel browser)
+		{
+			await browser.NavigateAsync(path);
 		}
 	}
 

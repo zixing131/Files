@@ -115,6 +115,11 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 
 	public bool CanGoForward => forwardStack.Count > 0;
 
+	// Stack.ToArray() returns entries from the top, so the most recent destination comes first.
+	public IReadOnlyList<string> BackHistory => backStack.ToArray();
+
+	public IReadOnlyList<string> ForwardHistory => forwardStack.ToArray();
+
 	public bool IsEmptyFolder => DirectoryEmptyState.IsEmptyFolder(IsLoading, Items.Count, SearchText);
 
 	public bool HasNoSearchResults => DirectoryEmptyState.HasNoSearchResults(IsLoading, Items.Count, SearchText);
@@ -241,6 +246,45 @@ public sealed partial class DirectoryBrowserViewModel : ObservableObject, IDispo
 			OnPropertyChanged(nameof(CanGoForward));
 			await NavigateAsync(path, addToHistory: false);
 		}
+	}
+
+	public Task GoBackToAsync(string path)
+	{
+		return JumpInHistoryAsync(backStack, forwardStack, path);
+	}
+
+	public Task GoForwardToAsync(string path)
+	{
+		return JumpInHistoryAsync(forwardStack, backStack, path);
+	}
+
+	// Jumps directly to a history entry: the current path and every entry passed over
+	// move to the opposite stack so a single navigation reaches the target.
+	private async Task JumpInHistoryAsync(Stack<string> source, Stack<string> destination, string path)
+	{
+		var skipped = new List<string>();
+		while (source.Count > 0 && !string.Equals(source.Peek(), path, StringComparison.Ordinal))
+		{
+			skipped.Add(source.Pop());
+		}
+		if (source.Count == 0)
+		{
+			for (int index = skipped.Count - 1; index >= 0; index--)
+			{
+				source.Push(skipped[index]);
+			}
+			return;
+		}
+
+		source.Pop();
+		destination.Push(CurrentPath);
+		foreach (string entry in skipped)
+		{
+			destination.Push(entry);
+		}
+		OnPropertyChanged(nameof(CanGoBack));
+		OnPropertyChanged(nameof(CanGoForward));
+		await NavigateAsync(path, addToHistory: false);
 	}
 
 	public Task GoUpAsync()

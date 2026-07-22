@@ -206,6 +206,7 @@
 				Grid.Column="1"
 				Click="BackButton_Click"
 				IsEnabled="{Binding ActiveBrowser.CanGoBack}"
+				RightTapped="BackButton_RightTapped"
 				Style="{StaticResource NavigationButtonStyle}">
 				<PathIcon Width="20" Height="20" Data="M8,2 L1,10 L8,18 L10,16 L6,12 H18 V8 H6 L10,4 Z" />
 			</Button>
@@ -214,6 +215,7 @@
 				Grid.Column="2"
 				Click="ForwardButton_Click"
 				IsEnabled="{Binding ActiveBrowser.CanGoForward}"
+				RightTapped="ForwardButton_RightTapped"
 				Style="{StaticResource NavigationButtonStyle}">
 				<PathIcon Width="20" Height="20" Data="M12,2 L19,10 L12,18 L10,16 L14,12 H2 V8 H14 L10,4 Z" />
 			</Button>
