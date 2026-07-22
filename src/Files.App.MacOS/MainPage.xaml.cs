@@ -34,7 +34,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private const double KeyboardResizeStep = 16;
 	private const long TypeSelectResetMilliseconds = 900;
 	private const long QuickLookToggleDebounceMilliseconds = 150;
-	private const double ItemDragDelayMilliseconds = 220;
 	private const double MarqueeDragThreshold = 5;
 	private const double MarqueeAutoScrollEdge = 24;
 	private const double MarqueeAutoScrollMaximumStep = 32;
@@ -120,18 +119,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 	private bool marqueePreservesSelection;
 	private bool marqueeTogglesSelection;
 	private bool hasMarqueeMoved;
-	private FrameworkElement? pendingMarqueeControl;
-	private DirectoryBrowserViewModel? pendingMarqueeBrowser;
-	private Canvas? pendingMarqueeLayer;
-	private Border? pendingMarqueeRectangle;
-	private PointerRoutedEventArgs? pendingMarqueePointerArgs;
-	private Windows.Foundation.Point pendingMarqueeStartPoint;
-	private bool pendingMarqueePreservesSelection;
-	private bool pendingMarqueeTogglesSelection;
-	private bool pendingMarqueeAllowsItemDrag;
-	private LocalFileSystemItem? pressedMarqueeItem;
-	private bool pressedMarqueeItemWasSelected;
-	private Microsoft.UI.Dispatching.DispatcherQueueTimer? itemGestureTimer;
 	private Microsoft.UI.Dispatching.DispatcherQueueTimer? marqueeAutoScrollTimer;
 
 	public MainPage()
@@ -3378,33 +3365,15 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			: (PrimaryMarqueeLayer, PrimaryMarqueeRectangle);
 		Windows.Foundation.Point pointerPoint = e.GetCurrentPoint(layer).Position;
 		int targetKind = GetMarqueeTargetKind(e.OriginalSource as DependencyObject, control, layer, pointerPoint);
-		if (targetKind is 0)
+		if (targetKind is not 1)
 		{
+			// Pressing on an item starts the native item drag immediately (single motion,
+			// per Apple HIG); marquee selection only ever starts from empty space.
 			return;
 		}
 		Windows.Foundation.Point startPoint = ClampToMarqueeControl(pointerPoint, control, layer);
-		bool togglesSelection = IsKeyDown(VirtualKey.Control);
+		bool togglesSelection = IsSelectionToggleModifierDown();
 		bool preservesSelection = togglesSelection || IsKeyDown(VirtualKey.Shift);
-		if (targetKind is 2)
-		{
-			if (pressedMarqueeItemWasSelected &&
-				FindMarqueeItem(e.OriginalSource as DependencyObject, control) is LocalFileSystemItem item &&
-				ReferenceEquals(item, pressedMarqueeItem))
-			{
-				CancelPendingMarqueeSelection();
-				return;
-			}
-			ScheduleItemGestureDecision(
-				control,
-				browser,
-				layer,
-				rectangle,
-				e,
-				startPoint,
-				preservesSelection,
-				togglesSelection);
-			return;
-		}
 
 		BeginMarqueeSelection(
 			control,
@@ -3460,106 +3429,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		control.CapturePointer(pointerArgs.Pointer);
 	}
 
-	private void ScheduleItemGestureDecision(
-		FrameworkElement control,
-		DirectoryBrowserViewModel browser,
-		Canvas layer,
-		Border rectangle,
-		PointerRoutedEventArgs pointerArgs,
-		Windows.Foundation.Point startPoint,
-		bool preservesSelection,
-		bool togglesSelection)
-	{
-		CancelPendingMarqueeSelection();
-		pendingMarqueeControl = control;
-		pendingMarqueeBrowser = browser;
-		pendingMarqueeLayer = layer;
-		pendingMarqueeRectangle = rectangle;
-		pendingMarqueePointerArgs = pointerArgs;
-		pendingMarqueeStartPoint = startPoint;
-		pendingMarqueePreservesSelection = preservesSelection;
-		pendingMarqueeTogglesSelection = togglesSelection;
-		pendingMarqueeAllowsItemDrag = false;
-		itemGestureTimer = DispatcherQueue.CreateTimer();
-		itemGestureTimer.Interval = TimeSpan.FromMilliseconds(ItemDragDelayMilliseconds);
-		itemGestureTimer.IsRepeating = false;
-		itemGestureTimer.Tick += ItemGestureTimer_Tick;
-		itemGestureTimer.Start();
-	}
-
-	private void ItemGestureTimer_Tick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
-	{
-		if (pendingMarqueeControl is null)
-		{
-			CancelPendingMarqueeSelection();
-			return;
-		}
-
-		sender.Stop();
-		sender.Tick -= ItemGestureTimer_Tick;
-		itemGestureTimer = null;
-		pendingMarqueeAllowsItemDrag = true;
-	}
-
-	private void CancelPendingMarqueeSelection()
-	{
-		if (itemGestureTimer is Microsoft.UI.Dispatching.DispatcherQueueTimer timer)
-		{
-			timer.Stop();
-			timer.Tick -= ItemGestureTimer_Tick;
-		}
-		itemGestureTimer = null;
-		pendingMarqueeControl = null;
-		pendingMarqueeBrowser = null;
-		pendingMarqueeLayer = null;
-		pendingMarqueeRectangle = null;
-		pendingMarqueePointerArgs = null;
-		pendingMarqueePreservesSelection = false;
-		pendingMarqueeTogglesSelection = false;
-		pendingMarqueeAllowsItemDrag = false;
-	}
-
 	private void Marquee_PointerMoved(object sender, PointerRoutedEventArgs e)
 	{
-		if (IsMarqueePane(sender, pendingMarqueeControl) &&
-			pendingMarqueeControl is FrameworkElement pendingControl &&
-			pendingMarqueeLayer is Canvas pendingLayer)
-		{
-			Windows.Foundation.Point pendingPoint = e.GetCurrentPoint(pendingLayer).Position;
-			if (pendingMarqueeAllowsItemDrag)
-			{
-				return;
-			}
-			if (Math.Abs(pendingPoint.X - pendingMarqueeStartPoint.X) < MarqueeDragThreshold &&
-				Math.Abs(pendingPoint.Y - pendingMarqueeStartPoint.Y) < MarqueeDragThreshold)
-			{
-				return;
-			}
-
-			FrameworkElement resolvedControl = pendingControl;
-			DirectoryBrowserViewModel? resolvedBrowser = pendingMarqueeBrowser;
-			Canvas resolvedLayer = pendingLayer;
-			Border? resolvedRectangle = pendingMarqueeRectangle;
-			PointerRoutedEventArgs? pointerArgs = pendingMarqueePointerArgs;
-			Windows.Foundation.Point startPoint = pendingMarqueeStartPoint;
-			bool preservesSelection = pendingMarqueePreservesSelection;
-			bool togglesSelection = pendingMarqueeTogglesSelection;
-			CancelPendingMarqueeSelection();
-			if (resolvedBrowser is null || resolvedRectangle is null || pointerArgs is null)
-			{
-				return;
-			}
-			BeginMarqueeSelection(
-				resolvedControl,
-				resolvedBrowser,
-				resolvedLayer,
-				resolvedRectangle,
-				pointerArgs,
-				startPoint,
-				preservesSelection,
-				togglesSelection,
-				startedFromItem: true);
-		}
 		if (!IsMarqueePane(sender, marqueeControl) || marqueeLayer is not Canvas layer || marqueeRectangle is not Border rectangle ||
 			marqueeBrowser is not DirectoryBrowserViewModel browser || marqueeControl is not FrameworkElement control)
 		{
@@ -3629,13 +3500,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void Marquee_PointerReleased(object sender, PointerRoutedEventArgs e)
 	{
-		pressedMarqueeItem = null;
-		pressedMarqueeItemWasSelected = false;
-		if (IsMarqueePane(sender, pendingMarqueeControl))
-		{
-			CancelPendingMarqueeSelection();
-			return;
-		}
 		if (!IsMarqueePane(sender, marqueeControl) || marqueeControl is not FrameworkElement control)
 		{
 			return;
@@ -3648,12 +3512,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 	private void Marquee_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
 	{
-		pressedMarqueeItem = null;
-		pressedMarqueeItemWasSelected = false;
-		if (IsMarqueePane(sender, pendingMarqueeControl))
-		{
-			CancelPendingMarqueeSelection();
-		}
 		if (IsMarqueePane(sender, marqueeControl))
 		{
 			EndMarqueeSelection();
@@ -3738,22 +3596,6 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			point.Y >= origin.Y && point.Y <= origin.Y + control.ActualHeight
 			? 1
 			: 0;
-	}
-
-	private static LocalFileSystemItem? FindMarqueeItem(DependencyObject? source, DependencyObject control)
-	{
-		for (DependencyObject? current = source; current is not null; current = VisualTreeHelper.GetParent(current))
-		{
-			if (current is FrameworkElement { DataContext: LocalFileSystemItem item })
-			{
-				return item;
-			}
-			if (ReferenceEquals(current, control))
-			{
-				break;
-			}
-		}
-		return null;
 	}
 
 	private static Windows.Foundation.Point ClampToMarqueeControl(
@@ -4635,7 +4477,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 		if (!IsInvalidInternalDropTarget(e.DataView, browser.CurrentPath))
 		{
-			FileTransferMode mode = GetDropTransferMode(e.DataView);
+			FileTransferMode mode = GetDropTransferMode(e.DataView, browser.CurrentPath);
 			e.AcceptedOperation = GetDataPackageOperation(mode);
 			e.DragUIOverride.IsCaptionVisible = true;
 			e.DragUIOverride.Caption = GetResource(mode is FileTransferMode.Move ? "DropMoveCaption" : "DropCopyCaption");
@@ -4669,7 +4511,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
-		FileTransferMode mode = GetDropTransferMode(e.DataView);
+		FileTransferMode mode = GetDropTransferMode(e.DataView, folder.Path);
 		e.AcceptedOperation = GetDataPackageOperation(mode);
 		e.DragUIOverride.IsCaptionVisible = true;
 		e.DragUIOverride.Caption = string.Format(
@@ -4718,7 +4560,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
-		SetFolderDropFeedback(e, location.Name);
+		SetFolderDropFeedback(e, location.Name, location.Path);
 	}
 
 	private async void SidebarLocation_Drop(object sender, DragEventArgs e)
@@ -4788,7 +4630,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			return;
 		}
 
-		SetFolderDropFeedback(e, ToolTipService.GetToolTip(button) as string ?? Path.GetFileName(path));
+		SetFolderDropFeedback(e, ToolTipService.GetToolTip(button) as string ?? Path.GetFileName(path), path);
 	}
 
 	private async void Breadcrumb_Drop(object sender, DragEventArgs e)
@@ -4808,9 +4650,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		await HandleItemsDropAsync(e, browser, path);
 	}
 
-	private void SetFolderDropFeedback(DragEventArgs e, string folderName)
+	private void SetFolderDropFeedback(DragEventArgs e, string folderName, string destinationDirectory)
 	{
-		FileTransferMode mode = GetDropTransferMode(e.DataView);
+		FileTransferMode mode = GetDropTransferMode(e.DataView, destinationDirectory);
 		e.AcceptedOperation = GetDataPackageOperation(mode);
 		e.DragUIOverride.IsCaptionVisible = true;
 		e.DragUIOverride.Caption = string.Format(
@@ -4874,24 +4716,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
-	private bool ShouldCancelItemDragForMarquee(FrameworkElement control)
-	{
-		if (ReferenceEquals(control, marqueeControl))
-		{
-			return true;
-		}
-		if (!ReferenceEquals(control, pendingMarqueeControl))
-		{
-			return false;
-		}
-		if (!pendingMarqueeAllowsItemDrag)
-		{
-			return true;
-		}
-
-		CancelPendingMarqueeSelection();
-		return false;
-	}
+	private bool ShouldCancelItemDragForMarquee(FrameworkElement control) =>
+		ReferenceEquals(control, marqueeControl);
 
 	private static bool ConfigureOutboundDrag(DataPackage data, IReadOnlyList<string> paths, bool prepareNativeDrag = true)
 	{
@@ -4972,7 +4798,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 
 		if (!IsInvalidInternalDropTarget(e.DataView, browser.CurrentPath))
 		{
-			FileTransferMode mode = GetDropTransferMode(e.DataView);
+			FileTransferMode mode = GetDropTransferMode(e.DataView, browser.CurrentPath);
 			e.AcceptedOperation = GetDataPackageOperation(mode);
 			e.DragUIOverride.IsCaptionVisible = true;
 			e.DragUIOverride.Caption = GetResource(mode is FileTransferMode.Move ? "DropMoveCaption" : "DropCopyCaption");
@@ -5045,7 +4871,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				}
 			}
 
-			FileTransferMode mode = GetDropTransferMode(e.DataView);
+			FileTransferMode mode = GetDropTransferMode(e.DataView, destinationDirectory);
 			e.AcceptedOperation = GetDataPackageOperation(mode);
 			await TransferItemsAsync(
 				new FileClipboardContent(paths, mode, 0),
@@ -5085,7 +4911,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 	}
 
-	private static FileTransferMode GetDropTransferMode(DataPackageView dataView)
+	private FileTransferMode GetDropTransferMode(DataPackageView dataView, string? destinationDirectory)
 	{
 		if (IsKeyDown(VirtualKey.Control) || IsKeyDown(VirtualKey.Menu))
 		{
@@ -5093,6 +4919,20 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		}
 		if (IsInternalFileDrag(dataView))
 		{
+			// Finder: holding Cmd while dragging forces a move even across volumes.
+			if (IsKeyDown(VirtualKey.LeftWindows) || IsKeyDown(VirtualKey.RightWindows))
+			{
+				return FileTransferMode.Move;
+			}
+			// Finder and Explorer both default to move within a volume and copy across volumes.
+			if (destinationDirectory is not null &&
+				selectedItems.Any(item => !string.Equals(
+					GetVolumeRoot(item.Path),
+					GetVolumeRoot(destinationDirectory),
+					StringComparison.Ordinal)))
+			{
+				return FileTransferMode.Copy;
+			}
 			return FileTransferMode.Move;
 		}
 
@@ -5101,6 +4941,19 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			!requestedOperation.HasFlag(DataPackageOperation.Copy)
 				? FileTransferMode.Move
 				: FileTransferMode.Copy;
+	}
+
+	private static string GetVolumeRoot(string path)
+	{
+		// On macOS every non-boot volume mounts under /Volumes/<name>; the boot volume is "/".
+		string fullPath = Path.GetFullPath(path);
+		const string volumesPrefix = "/Volumes/";
+		if (fullPath.StartsWith(volumesPrefix, StringComparison.Ordinal))
+		{
+			int nextSlash = fullPath.IndexOf('/', volumesPrefix.Length);
+			return nextSlash < 0 ? fullPath : fullPath[..nextSlash];
+		}
+		return "/";
 	}
 
 	private static DataPackageOperation GetDataPackageOperation(FileTransferMode mode) =>
@@ -5154,7 +5007,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			return;
 		}
-		if (IsKeyDown(VirtualKey.Control))
+		if (IsSelectionToggleModifierDown())
 		{
 			long timestamp = Environment.TickCount64;
 			if (!string.Equals(lastControlClickPath, item.Path, StringComparison.Ordinal) ||
@@ -5199,15 +5052,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			return;
 		}
-		FrameworkElement control = GetVisibleItemsControl(browser);
-		pressedMarqueeItem = item;
-		pressedMarqueeItemWasSelected = control switch
-		{
-			ItemsView view => browser.Items.IndexOf(item) is int index && index >= 0 && view.IsSelected(index),
-			ListViewBase list => list.SelectedItems.Contains(item),
-			_ => false,
-		};
-		if (!IsKeyDown(VirtualKey.Control))
+		if (!IsSelectionToggleModifierDown())
 		{
 			return;
 		}
@@ -6107,6 +5952,13 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			IsKeyDown(VirtualKey.RightWindows);
 	}
 
+	// Finder toggles item selection with Cmd-click and Explorer with Ctrl-click;
+	// accept both so either habit works.
+	private static bool IsSelectionToggleModifierDown() =>
+		IsKeyDown(VirtualKey.Control) ||
+		IsKeyDown(VirtualKey.LeftWindows) ||
+		IsKeyDown(VirtualKey.RightWindows);
+
 	private static bool IsKeyDown(VirtualKey key) =>
 		Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key)
 			.HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
@@ -6713,6 +6565,16 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			args.Handled = true;
 			DeleteButton_Click(DeleteButton, new RoutedEventArgs());
+		}
+	}
+
+	// Finder's Shift-Cmd-Delete empties the Trash from anywhere, with confirmation.
+	private void EmptyTrashAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (!IsTextInputFocused() && fileTransferCancellation is null)
+		{
+			args.Handled = true;
+			_ = EmptyTrashLocationAsync();
 		}
 	}
 
