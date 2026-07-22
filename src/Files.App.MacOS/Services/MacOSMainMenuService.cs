@@ -49,6 +49,7 @@ internal enum MacOSMenuCommand
 	NextTab,
 	PreviousTab,
 	ColumnView,
+	ToggleStatusBar,
 }
 
 internal interface IMacOSMenuCommandTarget

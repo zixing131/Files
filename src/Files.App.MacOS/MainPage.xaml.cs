@@ -354,6 +354,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		DetailColumnState.Apply(currentSettings.DetailColumns);
 		DetailColumnWidths.Apply(currentSettings.DetailColumnWidths);
 		ApplyGridIconSizeLevel(currentSettings.GridIconSizeLevel);
+		ApplyStatusBarVisibility(currentSettings.ShowStatusBar);
 		isSidebarOpen = currentSettings.IsSidebarOpen;
 		sidebarWidth = currentSettings.SidebarWidth;
 		isPreviewPaneOpen = currentSettings.IsPreviewPaneOpen;
@@ -1813,6 +1814,9 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 				break;
 			case MacOSMenuCommand.ColumnView when Browser is DirectoryBrowserViewModel columnBrowser:
 				SetViewMode(columnBrowser, BrowserViewMode.Columns);
+				break;
+			case MacOSMenuCommand.ToggleStatusBar:
+				await ToggleStatusBarAsync();
 				break;
 			case MacOSMenuCommand.TogglePreview:
 				SetPreviewPaneOpen(!isPreviewPaneOpen);
@@ -8878,6 +8882,27 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		return false;
 	}
 
+	private async Task ToggleStatusBarAsync()
+	{
+		bool show = StatusBarGrid.Visibility is Visibility.Collapsed;
+		ApplyStatusBarVisibility(show);
+		var newSettings = currentSettings with { ShowStatusBar = show };
+		try
+		{
+			newSettings = await PersistSettingsAsync(newSettings);
+			ViewModel.ApplySettings(newSettings);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			await ShowErrorAsync(string.IsNullOrEmpty(ex.Message) ? GetResource("SaveSettingsErrorMessage") : ex.Message);
+		}
+	}
+
+	private void ApplyStatusBarVisibility(bool show)
+	{
+		StatusBarGrid.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+	}
+
 	private async Task ChangeGridIconSizeLevelAsync(int level)
 	{
 		int clamped = Math.Clamp(level, GridItemSizeState.MinimumLevel, GridItemSizeState.MaximumLevel);
@@ -10119,6 +10144,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			HiddenDefaultSidebarLocations = HasSequenceChanged(requested.HiddenDefaultSidebarLocations, baseline.HiddenDefaultSidebarLocations, StringComparer.Ordinal) ? requested.HiddenDefaultSidebarLocations : latest.HiddenDefaultSidebarLocations,
 			Terminal = requested.Terminal != baseline.Terminal ? requested.Terminal : latest.Terminal,
 			GridIconSizeLevel = requested.GridIconSizeLevel != baseline.GridIconSizeLevel ? requested.GridIconSizeLevel : latest.GridIconSizeLevel,
+			ShowStatusBar = requested.ShowStatusBar != baseline.ShowStatusBar ? requested.ShowStatusBar : latest.ShowStatusBar,
 		};
 	}
 
