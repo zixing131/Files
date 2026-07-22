@@ -113,6 +113,9 @@
   <data name="CreateFolderDialogTitle" xml:space="preserve">
     <value>新建文件夹</value>
   </data>
+  <data name="NewFolderWithSelectionDialogTitle" xml:space="preserve">
+    <value>用所选项目新建文件夹</value>
+  </data>
   <data name="RenameDialogTitle" xml:space="preserve">
     <value>重命名项目</value>
   </data>

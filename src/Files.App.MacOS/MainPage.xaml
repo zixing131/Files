@@ -103,6 +103,12 @@
 		<KeyboardAccelerator Key="Enter" Modifiers="Windows" Invoked="OpenInNewTabAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Down" Modifiers="Windows" Invoked="OpenSelectionAccelerator_Invoked" />
 		<KeyboardAccelerator Key="Delete" Modifiers="Windows,Shift" Invoked="EmptyTrashAccelerator_Invoked" />
+		<KeyboardAccelerator Key="E" Modifiers="Windows" Invoked="EjectAccelerator_Invoked" />
+		<KeyboardAccelerator Key="V" Modifiers="Windows,Menu" Invoked="MoveClipboardHereAccelerator_Invoked" />
+		<KeyboardAccelerator Key="Y" Modifiers="Windows" Invoked="PreviewAccelerator_Invoked" />
+		<KeyboardAccelerator Key="R" Modifiers="Windows" Invoked="ShowOriginalAccelerator_Invoked" />
+		<KeyboardAccelerator Key="N" Modifiers="Windows,Control" Invoked="NewFolderWithSelectionAccelerator_Invoked" />
+		<KeyboardAccelerator Key="G" Modifiers="Windows,Shift" Invoked="GoToFolderAccelerator_Invoked" />
 		<KeyboardAccelerator Key="D" Modifiers="Windows" Invoked="DuplicateAccelerator_Invoked" />
 		<KeyboardAccelerator Key="L" Modifiers="Windows,Menu" Invoked="CreateSymbolicLinkAccelerator_Invoked" />
 		<KeyboardAccelerator Key="N" Modifiers="Windows" Invoked="NewWindowAccelerator_Invoked" />

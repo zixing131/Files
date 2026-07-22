@@ -4047,7 +4047,7 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		UpdateCommandStates();
 	}
 
-	private async Task PasteAsync()
+	private async Task PasteAsync(bool forceMove = false)
 	{
 		if (Browser is null || fileTransferCancellation is not null)
 		{
@@ -4069,6 +4069,11 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			targetBrowser.StatusText = GetResource("ClipboardHasNoFilesMessage");
 			return;
+		}
+
+		if (forceMove && clipboard.Mode is not FileTransferMode.Move)
+		{
+			clipboard = clipboard with { Mode = FileTransferMode.Move };
 		}
 
 		await TransferItemsAsync(clipboard, clearClipboardAfterMove: true);
@@ -6557,6 +6562,114 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 			refreshes.Add(secondary.RefreshAsync());
 		}
 		await Task.WhenAll(refreshes);
+	}
+
+	// Finder's Cmd-E ejects the selected volume, or the volume of the current folder.
+	private async void EjectAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (IsTextInputFocused() || fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		SidebarLocation? volume = SidebarList.SelectedItem is SidebarLocation { CanEject: true } selectedVolume
+			? selectedVolume
+			: null;
+		if (volume is null && Browser is DirectoryBrowserViewModel browser)
+		{
+			volume = ViewModel.Locations.FirstOrDefault(location =>
+				location is { IsHeader: false, CanEject: true } &&
+				IsSameOrDescendantPath(browser.CurrentPath, location.Path));
+		}
+		if (volume is null)
+		{
+			return;
+		}
+
+		args.Handled = true;
+		await ConfirmAndEjectVolumeAsync(volume);
+	}
+
+	// Finder's Option-Cmd-V moves the copied items to the current location.
+	private async void MoveClipboardHereAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (IsTextInputFocused() || fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		args.Handled = true;
+		await PasteAsync(forceMove: true);
+	}
+
+	// Finder's Cmd-R reveals the original of an alias; here it resolves symbolic links.
+	private async void ShowOriginalAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (IsTextInputFocused() ||
+			Browser is not DirectoryBrowserViewModel browser ||
+			selectedItems is not [LocalFileSystemItem item])
+		{
+			return;
+		}
+
+		FileSystemInfo? target = File.ResolveLinkTarget(item.Path, returnFinalTarget: true);
+		if (target is null || Path.GetDirectoryName(target.FullName) is not string parent)
+		{
+			return;
+		}
+
+		args.Handled = true;
+		await browser.NavigateAsync(parent);
+		SelectAndRevealPath(browser, target.FullName);
+	}
+
+	// Finder's Control-Cmd-N creates a new folder containing the selected items.
+	private async void NewFolderWithSelectionAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (IsTextInputFocused() ||
+			Browser is not DirectoryBrowserViewModel browser ||
+			selectedItems.Count is 0 ||
+			fileTransferCancellation is not null)
+		{
+			return;
+		}
+
+		args.Handled = true;
+		string[] paths = selectedItems.Select(static selected => selected.Path).ToArray();
+		var input = new TextBox
+		{
+			Text = GetResource("NewFolderDefaultName"),
+		};
+		var dialog = CreateTextInputDialog("NewFolderWithSelectionDialogTitle", "CreateButtonText", input);
+		if (await dialog.ShowAsync() is not ContentDialogResult.Primary || string.IsNullOrWhiteSpace(input.Text))
+		{
+			return;
+		}
+
+		try
+		{
+			string folderPath = await FileOperationService.CreateFolderAsync(browser.CurrentPath, input.Text.Trim());
+			await TransferItemsAsync(
+				new FileClipboardContent(paths, FileTransferMode.Move, 0),
+				clearClipboardAfterMove: false,
+				destinationDirectory: folderPath);
+			SelectAndRevealPath(browser, folderPath);
+		}
+		catch (FileOperationException ex)
+		{
+			await ShowErrorAsync(GetFileOperationError(ex));
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			await ShowErrorAsync(ex.Message);
+		}
+	}
+
+	// Finder's Shift-Cmd-G is "Go to Folder"; our address bar covers it once editing.
+	private void GoToFolderAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		args.Handled = true;
+		BeginAddressEdit();
 	}
 
 	private void MoveToTrashAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
