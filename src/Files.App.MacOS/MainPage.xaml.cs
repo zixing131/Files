@@ -9829,6 +9829,24 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		SaveFolderViewPreference(detailColumnsFlyoutBrowser);
 	}
 
+	// 将当前文件夹的视图选项推广为全局默认，未定制过的文件夹回退到这套配置
+	private void UseDefaultViewOptionsItem_Click(object sender, RoutedEventArgs e)
+	{
+		if (detailColumnsFlyoutBrowser is null)
+		{
+			return;
+		}
+
+		currentSettings = currentSettings with
+		{
+			DetailColumns = DetailColumnState.Capture(),
+			DetailColumnWidths = DetailColumnWidths.Capture(),
+			DetailColumnOrder = DetailColumnOrder.Capture(),
+			UseGridViewForNewTabs = detailColumnsFlyoutBrowser.IsGridView,
+		};
+		ScheduleWorkspaceSave();
+	}
+
 	private void DetailsHeader_RightTapped(object sender, RightTappedRoutedEventArgs e)
 	{
 		e.Handled = true;
