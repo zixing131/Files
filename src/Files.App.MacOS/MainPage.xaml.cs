@@ -9847,6 +9847,35 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		ScheduleWorkspaceSave();
 	}
 
+	private async void ResetFolderViewsItem_Click(object sender, RoutedEventArgs e)
+	{
+		if (folderViewPreferences.Count is 0)
+		{
+			return;
+		}
+
+		var dialog = new ContentDialog
+		{
+			Title = GetResource("ResetFolderViewsDialogTitle"),
+			Content = GetResource("ResetFolderViewsDialogMessage"),
+			PrimaryButtonText = GetResource("ResetFolderViewsButtonText"),
+			CloseButtonText = GetResource("CancelButtonText"),
+			DefaultButton = ContentDialogButton.Close,
+			XamlRoot = XamlRoot,
+		};
+		if (await dialog.ShowAsync() is not ContentDialogResult.Primary)
+		{
+			return;
+		}
+
+		folderViewPreferences.Clear();
+		currentSettings = currentSettings with { FolderViewPreferences = [] };
+		ScheduleWorkspaceSave();
+		// 强制所有打开的文件夹立即回退到全局默认
+		lastFolderPreferencePaths.Clear();
+		ApplyFolderViewPreferencesOnPathChange();
+	}
+
 	private void DetailsHeader_RightTapped(object sender, RightTappedRoutedEventArgs e)
 	{
 		e.Handled = true;

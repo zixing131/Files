@@ -62,6 +62,7 @@
 			<ToggleMenuFlyoutItem x:Uid="SortTagsItem" Click="DetailColumnMenuItem_Click" IsChecked="{Binding ShowTags, Source={StaticResource DetailColumnVisibilityState}, Mode=OneWay}" Tag="Tags" />
 			<MenuFlyoutSeparator />
 			<MenuFlyoutItem x:Uid="UseDefaultViewOptionsItem" Click="UseDefaultViewOptionsItem_Click" />
+			<MenuFlyoutItem x:Uid="ResetFolderViewsItem" Click="ResetFolderViewsItem_Click" />
 		</MenuFlyout>
 		<!--  Column view: tail column items reuse the shared item handlers and inline rename.  -->
 		<DataTemplate x:Key="ColumnViewItemTemplate">

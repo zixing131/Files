@@ -231,6 +231,18 @@
   <data name="UseDefaultViewOptionsItem.Text" xml:space="preserve">
     <value>用作默认设置</value>
   </data>
+  <data name="ResetFolderViewsItem.Text" xml:space="preserve">
+    <value>清除所有文件夹自定义视图</value>
+  </data>
+  <data name="ResetFolderViewsDialogTitle" xml:space="preserve">
+    <value>清除自定义视图</value>
+  </data>
+  <data name="ResetFolderViewsDialogMessage" xml:space="preserve">
+    <value>将清除所有文件夹记住的视图方式与列配置，并恢复为默认设置。</value>
+  </data>
+  <data name="ResetFolderViewsButtonText" xml:space="preserve">
+    <value>清除</value>
+  </data>
   <data name="SortModifiedItem.Text" xml:space="preserve">
     <value>修改日期</value>
   </data>
