@@ -9037,8 +9037,8 @@ public sealed partial class MainPage : Page, IMacOSMenuCommandTarget
 		{
 			SetViewMode(browser, GetViewMode(browser) switch
 			{
+				// 分栏视图暂时下线：视图切换按钮恢复两态循环（网格 ↔ 详细信息）
 				BrowserViewMode.Grid => BrowserViewMode.Details,
-				BrowserViewMode.Details => BrowserViewMode.Columns,
 				_ => BrowserViewMode.Grid,
 			});
 		}

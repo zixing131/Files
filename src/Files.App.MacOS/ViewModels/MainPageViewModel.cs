@@ -432,7 +432,8 @@ public sealed class MainPageViewModel : ObservableObject
 	private static void ApplyPaneState(DirectoryBrowserViewModel browser, BrowserPaneState state)
 	{
 		browser.IsGridView = state.IsGridView;
-		browser.IsColumnView = state.IsColumnView;
+		// 分栏视图暂时下线：持久化状态统一回退，避免老配置恢复后卡在分栏态
+		browser.IsColumnView = false;
 		if (Enum.TryParse(state.SortField, ignoreCase: true, out FileSortField sortField) &&
 			Enum.TryParse(state.SortDirection, ignoreCase: true, out FileSortDirection sortDirection))
 		{
